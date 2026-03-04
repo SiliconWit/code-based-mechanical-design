@@ -43,7 +43,7 @@ By the end of this lesson, you will be able to:
 <InArticleAd />
 
 
-Before writing any CAD code, you need three tools: **CadQuery** (the geometry kernel), **Jupyter** (the interactive notebook), and **OCP CAD Viewer** (the 3D visualizer for VS Code). CadQuery requires **Python 3.9 or newer** (3.10+ recommended). Check your version with `python3 --version` before proceeding.
+Before writing any CAD code, you need **CadQuery** (the geometry kernel) and a way to run Python scripts. You can use **Jupyter notebooks** for interactive, cell-by-cell exploration, or plain **Python scripts** run from the terminal. Both approaches produce the same STEP, STL, and GLB output files. CadQuery requires **Python 3.9 or newer** (3.10+ recommended). Check your version with `python3 --version` before proceeding.
 
 <Tabs>
   <TabItem label="pip (Linux/macOS)">
@@ -63,27 +63,45 @@ Before writing any CAD code, you need three tools: **CadQuery** (the geometry ke
    brew install python@3.10
    ```
 
-2. **Install CadQuery and Jupyter**:
+2. **Install CadQuery, Jupyter, and trimesh (for GLB export)**:
    ```bash
    pip install --upgrade pip
-   pip install cadquery ocp-vscode jupyter
+   pip install cadquery ocp-vscode jupyter trimesh
    ```
 
 3. **Verify the installation**:
+
+   **Option A: Jupyter notebook** (interactive, cell-by-cell):
    ```bash
    jupyter notebook
    ```
    Create a new notebook and run:
    ```python
    import cadquery as cq
+   import trimesh
 
    box = cq.Workplane("XY").box(10, 10, 10)
    cq.exporters.export(box, "test_box.step")
    cq.exporters.export(box, "test_box.stl")
-   print("CadQuery is working! Exported test_box.step and test_box.stl")
+
+   # Convert STL to GLB for web viewers
+   mesh = trimesh.load("test_box.stl")
+   mesh.export("test_box.glb")
+
+   print("CadQuery is working! Exported test_box.step, .stl, and .glb")
    ```
-   Open the exported `.step` file in FreeCAD or any CAD viewer to confirm the geometry looks correct.
+
+   **Option B: Plain Python script** (no Jupyter required):
+   Save the same code above as `test_cadquery.py` and run:
+   ```bash
+   python3 test_cadquery.py
+   ```
+   Both approaches produce identical output files.
 </Steps>
+
+:::tip[Viewing Your Models in FreeCAD]
+When you open a STEP or STL file in FreeCAD, the model may appear tiny or off-screen. Press **V** then **F** (View > Fit All) to zoom the model to fill the viewport. Press **0** on the numpad for an isometric view. These shortcuts work for every file you open throughout this course.
+:::
 
 :::tip[Live 3D Preview in VS Code (Optional)]
 For interactive visualization without exporting files, install the **OCP CAD Viewer** extension in VS Code (Extensions > search "OCP CAD Viewer"). Then run your notebooks from a VS Code terminal so the extension can connect. With the extension active, you can call:
@@ -106,26 +124,35 @@ Note: `show()` only works when the OCP CAD Viewer extension is running inside VS
    cadquery-env\Scripts\activate
    ```
 
-3. **Install CadQuery, the viewer, and Jupyter**:
+3. **Install CadQuery, Jupyter, and trimesh**:
    ```bash
    pip install --upgrade pip
-   pip install cadquery ocp-vscode jupyter
+   pip install cadquery ocp-vscode jupyter trimesh
    ```
 
 4. **Verify the installation**:
+
+   **Option A: Jupyter notebook**:
    ```bash
    jupyter notebook
    ```
    Create a new notebook and run:
    ```python
    import cadquery as cq
+   import trimesh
 
    box = cq.Workplane("XY").box(10, 10, 10)
    cq.exporters.export(box, "test_box.step")
    cq.exporters.export(box, "test_box.stl")
-   print("CadQuery is working! Exported test_box.step and test_box.stl")
+
+   mesh = trimesh.load("test_box.stl")
+   mesh.export("test_box.glb")
+
+   print("CadQuery is working! Exported test_box.step, .stl, and .glb")
    ```
-   Open the exported `.step` file in FreeCAD or any CAD viewer to confirm the geometry.
+
+   **Option B: Plain Python script**:
+   Save the code above as `test_cadquery.py` and run `python test_cadquery.py`.
 </Steps>
 
 :::tip[WSL Alternative]
@@ -149,19 +176,24 @@ Conda is the [recommended approach](https://cadquery.readthedocs.io/en/latest/in
    conda install -c conda-forge cadquery
    ```
 
-3. **Install Jupyter and the VS Code viewer**:
+3. **Install Jupyter, the VS Code viewer, and trimesh**:
    ```bash
-   pip install ocp-vscode jupyter
+   pip install ocp-vscode jupyter trimesh
    ```
 
 4. **Verify the installation**:
    ```python
    import cadquery as cq
+   import trimesh
 
    box = cq.Workplane("XY").box(10, 10, 10)
    cq.exporters.export(box, "test_box.step")
    cq.exporters.export(box, "test_box.stl")
-   print("CadQuery is working! Exported test_box.step and test_box.stl")
+
+   mesh = trimesh.load("test_box.stl")
+   mesh.export("test_box.glb")
+
+   print("CadQuery is working! Exported test_box.step, .stl, and .glb")
    ```
 </Steps>
 
@@ -1161,6 +1193,30 @@ hardware_library/
     ├── ...
     └── ISO7089_M20.stl
 ```
+
+### GLB Export for Web Viewers
+
+If you want to view your parts in a web-based 3D viewer or share them online, convert the STL files to GLB format using **trimesh**:
+
+```python
+import trimesh
+import os
+from pathlib import Path
+
+def convert_library_to_glb(library_dir: str = "hardware_library"):
+    """Convert all STL files in the library to GLB format."""
+    count = 0
+    for stl_path in Path(library_dir).rglob("*.stl"):
+        mesh = trimesh.load(str(stl_path))
+        glb_path = stl_path.with_suffix(".glb")
+        mesh.export(str(glb_path))
+        count += 1
+    print(f"Converted {count} STL files to GLB")
+
+convert_library_to_glb()
+```
+
+GLB files are compact, load quickly in browsers, and work with Three.js, model-viewer, and other web 3D libraries. You can view your GLB files directly at [SiliconWit GLB Viewer](https://siliconwit.com/product-development/glb-viewer/).
 
 ## Extending the Library
 
