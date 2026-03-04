@@ -1,0 +1,116 @@
+---
+title: "Code-Based Mechanical Design"
+description: "Master programmatic CAD with CadQuery. Generate parametric hardware libraries, involute gears, optimized heat sinks, lattice structures, and FEA-driven designs entirely from Python code"
+pubDate: 2026-03-04
+tags: ["cadquery", "python", "parametric-design", "mechanical-engineering", "generative-design", "additive-manufacturing", "optimization"]
+excerpt: "Design mechanical parts through code, not clicks. Build parametric hardware from engineering standards, generate involute gears, optimize heat sinks, create lattice structures for additive manufacturing, and drive FEA optimization loops, all from Python with CadQuery."
+heroImage: "https://cdn.siliconwit.com/education/code-based-mechanical-design/code-based-mechanical-design.png"
+---
+
+import Copyright from '../../../../components/Copyright.astro';
+import TawkWidget from '../../../../components/TawkWidget.astro';
+import { Card, CardGrid, Badge, Steps } from '@astrojs/starlight/components';
+
+Design production-quality mechanical parts entirely from Python code using CadQuery. This self-contained course covers fastener libraries, involute gears, thermal optimization, lattice structures, spring verification, and FEA-driven design, with every lesson producing manufacturable STEP and STL output. #CadQuery #CodeBasedCAD #MechanicalDesign
+
+## Why CadQuery?
+
+<CardGrid>
+  <Card title="Python-Native CAD" icon="seti:python">
+    CadQuery is a Python library, not a GUI application with a scripting layer bolted on. Your CAD models are Python programs: testable, diffable, and automatable.
+  </Card>
+
+  <Card title="Parametric by Default" icon="setting">
+    Every dimension is a variable. Change one parameter and the entire model regenerates correctly. No manual constraint repair, no broken sketches.
+  </Card>
+
+  <Card title="Engineering Ecosystem" icon="rocket">
+    Direct access to NumPy, SciPy, matplotlib, pandas. Run thermal calculations, parse data files, optimize parameters, and generate geometry, all in one script.
+  </Card>
+
+  <Card title="Production Output" icon="approve-check">
+    Export STEP files for CNC machining, STL for 3D printing, DXF for laser cutting. Industry-standard formats, no vendor lock-in.
+  </Card>
+</CardGrid>
+
+## Course Structure
+
+Each lesson follows a consistent approach:
+
+<Steps>
+1. **Engineering Problem**
+   Start with a real design challenge (a hardware library, a gear system, a thermal problem), not abstract exercises.
+
+2. **Theory & Standards**
+   Cover the engineering fundamentals: ISO standards, involute mathematics, thermal resistance models, stress equations.
+
+3. **CadQuery Implementation**
+   Write Python code that translates engineering knowledge into 3D geometry. Every function is parametric and reusable.
+
+4. **Verification & Output**
+   Validate designs against engineering criteria and export production-ready files.
+</Steps>
+
+## Lessons
+
+<Steps>
+1. **[Parametric Hardware Library from Engineering Standards](./parametric-hardware-library-engineering-standards)**
+   Build a reusable library of ISO-standard fasteners (hex bolts, socket cap screws, nuts, and washers) generated from standards tables. Set up CadQuery, Jupyter, and OCP CAD Viewer. Output: 50+ standard parts as STEP/STL files.
+
+2. **[Involute Gear Systems](./involute-gear-systems)**
+   Generate mathematically-perfect involute gears from parametric equations. Build single gears, meshing pairs, and a complete gear train with housing. Cover Lewis bending stress, contact ratio, and backlash. Output: 3D-printable gear train assembly.
+
+3. **[Custom Enclosure from PCB Data](./custom-enclosure-pcb-data)**
+   Parse KiCad PCB files to auto-generate enclosures with standoffs, port cutouts, ventilation, snap-fits, and lids. Output: print-ready enclosure for a real board (e.g., Raspberry Pi).
+
+4. **[Heat Sink Design & Thermal Optimization](./heat-sink-design-thermal-optimization)**
+   Model thermal resistance from junction to ambient. Compare straight, pin-fin, and radial fin geometries. Sweep parameters and visualize thermal performance maps with matplotlib. Output: optimized heat sink with thermal justification.
+
+5. **[Lattice Structures & TPMS for Additive Manufacturing](./lattice-structures-tpms-additive-manufacturing)**
+   Generate strut-based lattices (cubic, BCC, octet-truss) and TPMS surfaces (gyroid, Schwarz-P, diamond). Implement graded density and conformal lattices. Address printability constraints. Output: lightweight structural parts for SLA/SLS/FDM.
+
+6. **[Spring Design with Engineering Stress Verification](./spring-design-stress-verification)**
+   Design compression, extension, and torsion springs from load requirements. Generate helical geometry with CadQuery wire sweeps. Apply Wahl correction factor and Goodman fatigue analysis. Output: springs designed to specific load and life requirements.
+
+7. **[FEA-Driven Structural Optimization](./fea-driven-structural-optimization)**
+   Close the loop between CadQuery and FreeCAD FEM. Generate parametric brackets, mesh and solve with CalculiX, record results, sweep parameters, and plot Pareto fronts (mass vs. stress). Output: optimized bracket with full FEA justification.
+</Steps>
+
+## Prerequisites
+
+<Badge text="Python basics required" variant="note" />
+
+**You should be comfortable with:**
+- Python fundamentals (functions, loops, dictionaries)
+- Basic command-line usage (pip install, running scripts)
+- Engineering drawings and 3D concepts
+
+**Helpful but not required:**
+- Experience with FreeCAD or any CAD software
+- Familiarity with NumPy/matplotlib
+- Our [Parametric Mechanical CAD with FreeCAD](/education/parametric-mechanical-cad-freecad/) course
+
+## Getting Started
+
+<Steps>
+1. **Install CadQuery and tools**
+   ```bash
+   pip install cadquery ocp-vscode jupyter
+   ```
+
+2. **Start with Lesson 1**, which sets up your environment and builds a reusable parts library
+
+3. **Work through lessons sequentially**, as each builds on patterns from earlier lessons
+
+4. **Modify parameters and experiment**: the whole point of code-based design is easy iteration
+
+5. **Export and manufacture**: every lesson produces STEP/STL files ready for production
+</Steps>
+
+:::tip[Coming from FreeCAD?]
+If you completed our [Parametric Mechanical CAD with FreeCAD](/education/parametric-mechanical-cad-freecad/) course, you already understand parametric thinking and engineering-first design. This course takes that mindset and applies it through code, giving you the ability to handle complexity, optimization, and automation that GUI workflows cannot match.
+:::
+
+<Copyright />
+
+<TawkWidget />

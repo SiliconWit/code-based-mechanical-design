@@ -1,0 +1,1195 @@
+---
+title: "Parametric Hardware Library from Engineering Standards"
+description: "Build a reusable library of ISO-standard fasteners (hex bolts, socket cap screws, nuts, and washers) generated from standards tables using CadQuery and Python"
+contributors: "sam-macharia,consolata-kiiru,bright-gitari"
+pubDate: 2026-03-04
+tags: ["cadquery", "python", "parametric-design", "fasteners", "ISO-standards", "mechanical-engineering", "hardware-library"]
+excerpt: "Set up CadQuery with Jupyter and OCP CAD Viewer, then build parametric Python functions that generate ISO-standard hex bolts, socket cap screws, nuts, and washers from engineering tables. Output: 50+ STEP/STL files ready for assembly."
+heroImage: "https://cdn.siliconwit.com/education/code-based-mechanical-design/library-of-ISO-standard-fasteners.jpg"
+---
+
+import TawkWidget from '../../../../components/TawkWidget.astro';
+import UniversalContentContributors from '../../../../components/UniversalContentContributors.astro';
+import InArticleAd from '../../../../components/InArticleAd.astro';
+import Copyright from '../../../../components/Copyright.astro';
+import BionicText from '../../../../components/BionicText.astro';
+import TailwindWrapper from '../../../../components/TailwindWrapper.jsx';
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+import { Card, CardGrid, Badge, Steps, LinkButton } from '@astrojs/starlight/components';
+
+<UniversalContentContributors 
+  contributors={frontmatter.contributors}
+/>
+
+
+
+import CodeBasedMechanicalDesignComments from '../../../../components/code-based-mechanical-design/CodeBasedMechanicalDesignComments.astro';
+
+Build a complete library of ISO-standard fasteners, including hex bolts, socket cap screws, nuts, and washers, all generated from engineering tables using CadQuery and Python. Instead of downloading inaccurate CAD models from the web, you will produce 50+ STEP and STL files from authoritative ISO dimensions that you can reuse across every project. #CadQuery #ISOFasteners #ParametricCAD
+
+## Learning Objectives
+
+By the end of this lesson, you will be able to:
+
+1. <Badge text="Set Up" variant="tip" /> CadQuery with Jupyter and OCP CAD Viewer for interactive 3D development
+2. <Badge text="Translate" variant="note" /> ISO standards tables into Python dictionaries for parametric design
+3. <Badge text="Generate" variant="tip" /> helical thread geometry from ISO metric thread equations
+4. <Badge text="Build" variant="caution" /> parametric functions for hex bolts, socket cap screws, nuts, and washers
+5. <Badge text="Export" variant="note" /> a batch library of 50+ standard parts as STEP and STL files
+6. <Badge text="Validate" variant="tip" /> generated dimensions against ISO specifications
+
+## Environment Setup
+
+<InArticleAd />
+
+
+Before writing any CAD code, you need three tools: **CadQuery** (the geometry kernel), **Jupyter** (the interactive notebook), and **OCP CAD Viewer** (the 3D visualizer for VS Code).
+
+<Steps>
+1. **Create a virtual environment** (recommended to avoid package conflicts):
+   ```bash
+   python -m venv cadquery-env
+   source cadquery-env/bin/activate  # Linux/macOS
+   # cadquery-env\Scripts\activate   # Windows
+   ```
+
+2. **Install CadQuery and supporting tools**:
+   ```bash
+   pip install cadquery ocp-vscode jupyter
+   ```
+
+3. **Install the OCP CAD Viewer extension in VS Code**:
+   Open VS Code, go to Extensions (Ctrl+Shift+X), search for "OCP CAD Viewer," and install it. This gives you a live 3D viewport that updates as you run cells.
+
+4. **Start Jupyter and verify the installation**:
+   ```bash
+   jupyter notebook
+   ```
+   Create a new notebook and run:
+   ```python
+   import cadquery as cq
+   from ocp_vscode import show
+
+   # Quick verification — a simple box
+   box = cq.Workplane("XY").box(10, 10, 10)
+   show(box)
+   ```
+   If you see a 10 mm cube in the OCP CAD Viewer panel, your setup is working.
+
+5. **Alternative: use CQ-editor** if you prefer a standalone GUI:
+   ```bash
+   pip install cq-editor
+   ```
+   CQ-editor includes a built-in 3D viewer and code editor, but this course assumes the Jupyter + OCP workflow.
+</Steps>
+
+:::tip[Conda Alternative]
+If you use Anaconda/Miniconda, CadQuery is also available via conda-forge:
+```bash
+conda install -c conda-forge cadquery
+```
+This can resolve OpenCASCADE build issues on some systems.
+:::
+
+## ISO Standards Reference
+
+<InArticleAd />
+
+
+Every dimension in this lesson comes from published ISO standards. The four fastener types we will generate correspond to these documents:
+
+<CardGrid>
+  <Card title="ISO 4014: Hex Bolts" icon="document">
+    Hexagon head bolts with shank. Defines head height, across-flats width, and thread length for each nominal size.
+  </Card>
+  <Card title="ISO 4762: Socket Cap Screws" icon="document">
+    Hexagon socket head cap screws. Defines head diameter, head height, and socket size for internal hex drive.
+  </Card>
+  <Card title="ISO 4032: Hex Nuts" icon="document">
+    Hexagon nuts, Style 1. Defines across-flats width, across-corners width, and nut height for each size.
+  </Card>
+  <Card title="ISO 7089: Flat Washers" icon="document">
+    Plain washers, normal series. Defines inner diameter, outer diameter, and thickness for each nominal size.
+  </Card>
+</CardGrid>
+
+### ISO Metric Thread Dimensions (ISO 261 / ISO 724)
+
+The foundation of every fastener is the thread. ISO metric threads are defined by the nominal diameter $d$ and the pitch $P$. All other thread dimensions derive from these two values.
+
+| Size | Nominal Diameter $d$ (mm) | Coarse Pitch $P$ (mm) | Minor Diameter $d_3$ (mm) | Pitch Diameter $d_2$ (mm) |
+|------|--------------------------|----------------------|--------------------------|--------------------------|
+| M3   | 3.000  | 0.500 | 2.387 | 2.675 |
+| M4   | 4.000  | 0.700 | 3.141 | 3.545 |
+| M5   | 5.000  | 0.800 | 4.019 | 4.480 |
+| M6   | 6.000  | 1.000 | 4.773 | 5.350 |
+| M8   | 8.000  | 1.250 | 6.466 | 7.188 |
+| M10  | 10.000 | 1.500 | 8.160 | 9.026 |
+| M12  | 12.000 | 1.750 | 9.853 | 10.863 |
+| M14  | 14.000 | 2.000 | 11.546 | 12.701 |
+| M16  | 16.000 | 2.000 | 13.546 | 14.701 |
+| M20  | 20.000 | 2.500 | 16.933 | 18.376 |
+
+**Key thread equations** (ISO 68-1):
+
+The basic thread profile follows these relationships:
+
+$$H = \frac{\sqrt{3}}{2} \cdot P$$
+
+where $H$ is the fundamental triangle height. The major diameter equals the nominal diameter $d$. The pitch diameter is:
+
+$$d_2 = d - 0.6495 \cdot P$$
+
+And the minor diameter is:
+
+$$d_3 = d - 1.2269 \cdot P$$
+
+### ISO 4014: Hex Bolt Dimensions
+
+| Size | Thread Pitch $P$ (mm) | Head Width Across Flats $s$ (mm) | Head Height $k$ (mm) | Default Thread Length $b$ (mm, for $l \leq 125$) |
+|------|----------------------|----------------------------------|---------------------|--------------------------------------------------|
+| M3   | 0.50 | 5.50  | 2.0  | 12 |
+| M4   | 0.70 | 7.00  | 2.8  | 14 |
+| M5   | 0.80 | 8.00  | 3.5  | 16 |
+| M6   | 1.00 | 10.00 | 4.0  | 18 |
+| M8   | 1.25 | 13.00 | 5.3  | 22 |
+| M10  | 1.50 | 16.00 | 6.4  | 26 |
+| M12  | 1.75 | 18.00 | 7.5  | 30 |
+| M14  | 2.00 | 21.00 | 8.8  | 34 |
+| M16  | 2.00 | 24.00 | 10.0 | 38 |
+| M20  | 2.50 | 30.00 | 12.5 | 46 |
+
+### ISO 4762: Socket Head Cap Screw Dimensions
+
+| Size | Thread Pitch $P$ (mm) | Head Diameter $d_k$ (mm) | Head Height $k$ (mm) | Socket Size $s$ (mm) |
+|------|----------------------|--------------------------|---------------------|---------------------|
+| M3   | 0.50 | 5.50  | 3.0  | 2.5  |
+| M4   | 0.70 | 7.00  | 4.0  | 3.0  |
+| M5   | 0.80 | 8.50  | 5.0  | 4.0  |
+| M6   | 1.00 | 10.00 | 6.0  | 5.0  |
+| M8   | 1.25 | 13.00 | 8.0  | 6.0  |
+| M10  | 1.50 | 16.00 | 10.0 | 8.0  |
+| M12  | 1.75 | 18.00 | 12.0 | 10.0 |
+| M14  | 2.00 | 21.00 | 14.0 | 12.0 |
+| M16  | 2.00 | 24.00 | 16.0 | 14.0 |
+| M20  | 2.50 | 30.00 | 20.0 | 17.0 |
+
+### ISO 4032: Hex Nut Dimensions
+
+| Size | Thread Pitch $P$ (mm) | Width Across Flats $s$ (mm) | Width Across Corners $e$ (mm) | Nut Height $m$ (mm) |
+|------|----------------------|----------------------------|------------------------------|-------------------|
+| M3   | 0.50 | 5.50  | 6.01  | 2.4  |
+| M4   | 0.70 | 7.00  | 7.66  | 3.2  |
+| M5   | 0.80 | 8.00  | 8.79  | 4.7  |
+| M6   | 1.00 | 10.00 | 11.05 | 5.2  |
+| M8   | 1.25 | 13.00 | 14.38 | 6.8  |
+| M10  | 1.50 | 16.00 | 17.77 | 8.4  |
+| M12  | 1.75 | 18.00 | 20.03 | 10.8 |
+| M14  | 2.00 | 21.00 | 23.36 | 12.8 |
+| M16  | 2.00 | 24.00 | 26.75 | 14.8 |
+| M20  | 2.50 | 30.00 | 33.53 | 18.0 |
+
+### ISO 7089: Flat Washer Dimensions
+
+| Size | Inner Diameter $d_1$ (mm) | Outer Diameter $d_2$ (mm) | Thickness $h$ (mm) |
+|------|--------------------------|--------------------------|-------------------|
+| M3   | 3.2  | 7.0   | 0.5 |
+| M4   | 4.3  | 9.0   | 0.8 |
+| M5   | 5.3  | 10.0  | 1.0 |
+| M6   | 6.4  | 12.0  | 1.6 |
+| M8   | 8.4  | 16.0  | 1.6 |
+| M10  | 10.5 | 20.0  | 2.0 |
+| M12  | 13.0 | 24.0  | 2.5 |
+| M14  | 15.0 | 28.0  | 2.5 |
+| M16  | 17.0 | 30.0  | 3.0 |
+| M20  | 21.0 | 37.0  | 3.0 |
+
+## Standards Data in Python
+
+<InArticleAd />
+
+
+The first step is encoding these ISO tables as Python dictionaries. This is the parametric foundation: every function will look up dimensions from these dictionaries.
+
+```python
+import cadquery as cq
+import math
+import os
+
+# ─── ISO Metric Thread Data (ISO 261) ───
+THREAD_DATA = {
+    "M3":  {"d": 3.0,  "P": 0.50},
+    "M4":  {"d": 4.0,  "P": 0.70},
+    "M5":  {"d": 5.0,  "P": 0.80},
+    "M6":  {"d": 6.0,  "P": 1.00},
+    "M8":  {"d": 8.0,  "P": 1.25},
+    "M10": {"d": 10.0, "P": 1.50},
+    "M12": {"d": 12.0, "P": 1.75},
+    "M14": {"d": 14.0, "P": 2.00},
+    "M16": {"d": 16.0, "P": 2.00},
+    "M20": {"d": 20.0, "P": 2.50},
+}
+
+# ─── ISO 4014: Hex Bolt Head Dimensions ───
+HEX_BOLT_DATA = {
+    "M3":  {"s": 5.5,  "k": 2.0,  "b": 12},
+    "M4":  {"s": 7.0,  "k": 2.8,  "b": 14},
+    "M5":  {"s": 8.0,  "k": 3.5,  "b": 16},
+    "M6":  {"s": 10.0, "k": 4.0,  "b": 18},
+    "M8":  {"s": 13.0, "k": 5.3,  "b": 22},
+    "M10": {"s": 16.0, "k": 6.4,  "b": 26},
+    "M12": {"s": 18.0, "k": 7.5,  "b": 30},
+    "M14": {"s": 21.0, "k": 8.8,  "b": 34},
+    "M16": {"s": 24.0, "k": 10.0, "b": 38},
+    "M20": {"s": 30.0, "k": 12.5, "b": 46},
+}
+
+# ─── ISO 4762: Socket Head Cap Screw Dimensions ───
+SOCKET_CAP_DATA = {
+    "M3":  {"dk": 5.5,  "k": 3.0,  "s_hex": 2.5},
+    "M4":  {"dk": 7.0,  "k": 4.0,  "s_hex": 3.0},
+    "M5":  {"dk": 8.5,  "k": 5.0,  "s_hex": 4.0},
+    "M6":  {"dk": 10.0, "k": 6.0,  "s_hex": 5.0},
+    "M8":  {"dk": 13.0, "k": 8.0,  "s_hex": 6.0},
+    "M10": {"dk": 16.0, "k": 10.0, "s_hex": 8.0},
+    "M12": {"dk": 18.0, "k": 12.0, "s_hex": 10.0},
+    "M14": {"dk": 21.0, "k": 14.0, "s_hex": 12.0},
+    "M16": {"dk": 24.0, "k": 16.0, "s_hex": 14.0},
+    "M20": {"dk": 30.0, "k": 20.0, "s_hex": 17.0},
+}
+
+# ─── ISO 4032: Hex Nut Dimensions ───
+HEX_NUT_DATA = {
+    "M3":  {"s": 5.5,  "e": 6.01,  "m": 2.4},
+    "M4":  {"s": 7.0,  "e": 7.66,  "m": 3.2},
+    "M5":  {"s": 8.0,  "e": 8.79,  "m": 4.7},
+    "M6":  {"s": 10.0, "e": 11.05, "m": 5.2},
+    "M8":  {"s": 13.0, "e": 14.38, "m": 6.8},
+    "M10": {"s": 16.0, "e": 17.77, "m": 8.4},
+    "M12": {"s": 18.0, "e": 20.03, "m": 10.8},
+    "M14": {"s": 21.0, "e": 23.36, "m": 12.8},
+    "M16": {"s": 24.0, "e": 26.75, "m": 14.8},
+    "M20": {"s": 30.0, "e": 33.53, "m": 18.0},
+}
+
+# ─── ISO 7089: Flat Washer Dimensions ───
+WASHER_DATA = {
+    "M3":  {"d1": 3.2,  "d2": 7.0,   "h": 0.5},
+    "M4":  {"d1": 4.3,  "d2": 9.0,   "h": 0.8},
+    "M5":  {"d1": 5.3,  "d2": 10.0,  "h": 1.0},
+    "M6":  {"d1": 6.4,  "d2": 12.0,  "h": 1.6},
+    "M8":  {"d1": 8.4,  "d2": 16.0,  "h": 1.6},
+    "M10": {"d1": 10.5, "d2": 20.0,  "h": 2.0},
+    "M12": {"d1": 13.0, "d2": 24.0,  "h": 2.5},
+    "M14": {"d1": 15.0, "d2": 28.0,  "h": 2.5},
+    "M16": {"d1": 17.0, "d2": 30.0,  "h": 3.0},
+    "M20": {"d1": 21.0, "d2": 37.0,  "h": 3.0},
+}
+```
+
+:::note[Why dictionaries, not a database?]
+For a library of this size, flat dictionaries are the simplest and most readable format. If you scale to hundreds of entries or need to query across standards, consider loading from a CSV or SQLite database. The parametric functions accept the same keyword arguments either way.
+:::
+
+## Thread Generation
+
+<InArticleAd />
+
+
+Generating realistic helical threads is the most complex part of fastener modeling. ISO 60-degree threads follow a specific cross-section profile swept along a helix.
+
+### Thread Profile Geometry
+
+The ISO metric thread profile is a truncated triangle with a 60-degree included angle. The key cross-section parameters are:
+
+$$H = \frac{\sqrt{3}}{2} \cdot P \approx 0.8660 \cdot P$$
+
+The external thread (bolt) has a flat crest and a rounded root:
+- Crest truncation: $\frac{H}{8}$
+- Root truncation: $\frac{H}{4}$
+
+The actual thread height (from root to crest of the external thread) is:
+
+$$h_3 = \frac{5}{8} \cdot H = \frac{5\sqrt{3}}{16} \cdot P$$
+
+### Helical Thread Function
+
+```python
+def make_thread(diameter, pitch, length, external=True):
+    """
+    Generate an ISO metric thread using a helical sweep.
+
+    Parameters:
+        diameter (float): Nominal diameter in mm (e.g., 6.0 for M6)
+        pitch (float): Thread pitch in mm (e.g., 1.0 for M6 coarse)
+        length (float): Thread length in mm
+        external (bool): True for bolt thread, False for nut thread
+
+    Returns:
+        cq.Workplane: CadQuery solid of the threaded cylinder
+    """
+    # Fundamental triangle height (ISO 68-1)
+    H = (math.sqrt(3) / 2.0) * pitch
+
+    # Thread cross-section parameters
+    if external:
+        # External thread (bolt): major diameter = nominal
+        d_major = diameter
+        d_minor = diameter - 2 * (5/8) * H
+        # Simplified: create thread as a helical cut on a cylinder
+        thread_depth = (5/8) * H
+    else:
+        # Internal thread (nut): minor diameter = nominal - 2*(5/8)*H
+        d_major = diameter + 2 * (1/8) * H  # slight clearance
+        d_minor = diameter - 2 * (5/8) * H
+        thread_depth = (5/8) * H
+
+    # Number of full turns
+    n_turns = length / pitch
+
+    # Build the base cylinder
+    if external:
+        base = (
+            cq.Workplane("XY")
+            .circle(d_major / 2.0)
+            .extrude(length)
+        )
+    else:
+        # For internal, we return a hollow cylinder (thread bore)
+        base = (
+            cq.Workplane("XY")
+            .circle(d_major / 2.0 + 1.0)  # outer wall
+            .circle(d_minor / 2.0)          # inner bore
+            .extrude(length)
+        )
+
+    # Create the helical thread profile
+    # Use a triangular cross-section swept along a helix
+    helix_wire = cq.Wire.makeHelix(
+        pitch=pitch,
+        height=length,
+        radius=d_major / 2.0 if external else d_minor / 2.0 + thread_depth,
+    )
+
+    # Thread cross-section: 60-degree ISO triangle (truncated)
+    crest_flat = H / 8.0
+    root_flat = H / 4.0
+    half_angle = math.radians(30)
+
+    # Define the triangular thread profile points
+    # Profile is in the XZ plane, positioned at the helix radius
+    r = d_major / 2.0 if external else d_minor / 2.0 + thread_depth
+    profile_pts = [
+        (r - thread_depth, -pitch / 4.0 + root_flat / 2.0),
+        (r,                -crest_flat / 2.0),
+        (r,                 crest_flat / 2.0),
+        (r - thread_depth,  pitch / 4.0 - root_flat / 2.0),
+    ]
+
+    # Create the profile wire
+    thread_profile = (
+        cq.Workplane("XZ")
+        .moveTo(profile_pts[0][0], profile_pts[0][1])
+        .lineTo(profile_pts[1][0], profile_pts[1][1])
+        .lineTo(profile_pts[2][0], profile_pts[2][1])
+        .lineTo(profile_pts[3][0], profile_pts[3][1])
+        .close()
+        .wire()
+    )
+
+    # Sweep the profile along the helix
+    thread_solid = cq.Workplane("XY").sweep(thread_profile, helix_wire)
+
+    return base.union(thread_solid) if external else base.cut(thread_solid)
+```
+
+:::caution[Thread Simplification]
+Full helical thread sweeps can be computationally expensive and may cause issues when exporting to STL for 3D printing. For many applications, a **cosmetic thread** (just the cylinder at the correct pitch diameter) is sufficient. The function below provides a simpler alternative that is faster to compute and export.
+:::
+
+### Simplified Thread (Cosmetic)
+
+For faster generation and lighter file sizes, use a cosmetic thread that represents the thread as concentric cylinders at the major and minor diameters:
+
+```python
+def make_cosmetic_thread(diameter, pitch, length, external=True):
+    """
+    Generate a simplified cosmetic thread representation.
+    Uses concentric cylinders at major and minor diameters.
+    Much faster than helical sweep; sufficient for assembly visualization.
+    """
+    H = (math.sqrt(3) / 2.0) * pitch
+    d_minor = diameter - 2 * (5/8) * H
+
+    if external:
+        # Bolt: cylinder at minor diameter with thread indicator rings
+        thread = (
+            cq.Workplane("XY")
+            .circle(diameter / 2.0)
+            .extrude(length)
+        )
+        # Add visual thread indicator: grooves at pitch intervals
+        n_grooves = int(length / pitch)
+        for i in range(n_grooves):
+            z = i * pitch + pitch / 2.0
+            groove = (
+                cq.Workplane("XY")
+                .workplane(offset=z)
+                .circle(diameter / 2.0)
+                .circle(d_minor / 2.0)
+                .extrude(pitch * 0.1)
+            )
+            thread = thread.cut(groove)
+        return thread
+    else:
+        # Nut: bore at minor diameter
+        return (
+            cq.Workplane("XY")
+            .circle(diameter / 2.0 + 2.0)
+            .circle(d_minor / 2.0)
+            .extrude(length)
+        )
+```
+
+## Hex Bolt: `make_hex_bolt()`
+
+<InArticleAd />
+
+
+<Tabs>
+  <TabItem label="Function Code">
+
+```python
+def make_hex_bolt(size, length, thread_type="cosmetic"):
+    """
+    Generate an ISO 4014 hex bolt.
+
+    Parameters:
+        size (str): Bolt size, e.g. "M6", "M10"
+        length (float): Total bolt length in mm (shank + thread)
+        thread_type (str): "cosmetic" for fast, "helical" for detailed
+
+    Returns:
+        cq.Workplane: Complete hex bolt solid
+    """
+    # Look up ISO dimensions
+    td = THREAD_DATA[size]
+    hd = HEX_BOLT_DATA[size]
+    d = td["d"]       # nominal diameter
+    P = td["P"]       # thread pitch
+    s = hd["s"]       # across-flats width
+    k = hd["k"]       # head height
+    b = hd["b"]       # thread length (ISO default)
+
+    # Calculate derived dimensions
+    e = s / math.cos(math.radians(30))  # across-corners width
+    thread_len = min(b, length)          # actual thread length
+    shank_len = max(0, length - thread_len)
+
+    # ─── Head: hexagonal prism with chamfered edges ───
+    head = (
+        cq.Workplane("XY")
+        .polygon(6, e)               # regular hexagon, across-corners
+        .extrude(k)
+        .edges("|Z")
+        .chamfer(0.5)                # edge chamfer
+        .edges(">Z")
+        .chamfer(k * 0.15)          # top chamfer
+    )
+
+    # ─── Shank: unthreaded cylindrical section ───
+    if shank_len > 0:
+        shank = (
+            cq.Workplane("XY")
+            .workplane(offset=-shank_len)
+            .circle(d / 2.0)
+            .extrude(shank_len)
+        )
+    else:
+        shank = cq.Workplane("XY")  # empty
+
+    # ─── Threaded section ───
+    thread_start_z = -shank_len - thread_len
+    if thread_type == "helical":
+        thread = make_thread(d, P, thread_len, external=True)
+    else:
+        thread = make_cosmetic_thread(d, P, thread_len, external=True)
+
+    # Move thread to correct position
+    thread = thread.translate((0, 0, thread_start_z))
+
+    # ─── Thread tip: 45-degree chamfer on the end ───
+    chamfer_height = d * 0.3
+    tip_cut = (
+        cq.Workplane("XY")
+        .workplane(offset=thread_start_z)
+        .cone(d / 2.0, 0, chamfer_height, centered=(True, True, False))
+        .translate((0, 0, -chamfer_height))
+    )
+
+    # ─── Assembly ───
+    bolt = head
+    if shank_len > 0:
+        bolt = bolt.union(shank)
+    bolt = bolt.union(thread)
+
+    return bolt
+```
+
+  </TabItem>
+  <TabItem label="Usage Example">
+
+```python
+from ocp_vscode import show
+
+# Generate an M8x40 hex bolt
+bolt_m8 = make_hex_bolt("M8", 40)
+show(bolt_m8)
+
+# Generate an M12x60 hex bolt with helical threads
+bolt_m12 = make_hex_bolt("M12", 60, thread_type="helical")
+show(bolt_m12)
+
+# Generate a short M6x16 bolt (fully threaded)
+bolt_m6 = make_hex_bolt("M6", 16)
+show(bolt_m6)
+```
+
+  </TabItem>
+  <TabItem label="Dimension Validation">
+
+```python
+def validate_hex_bolt(size, length):
+    """Validate generated bolt against ISO 4014 dimensions."""
+    bolt = make_hex_bolt(size, length)
+    bb = bolt.val().BoundingBox()
+
+    td = THREAD_DATA[size]
+    hd = HEX_BOLT_DATA[size]
+
+    expected_height = hd["k"] + length
+    actual_height = bb.zmax - bb.zmin
+
+    e = hd["s"] / math.cos(math.radians(30))
+    actual_width = max(bb.xmax - bb.xmin, bb.ymax - bb.ymin)
+
+    print(f"─── {size}x{length} Validation ───")
+    print(f"Height: expected {expected_height:.1f} mm, "
+          f"actual {actual_height:.1f} mm, "
+          f"error {abs(expected_height - actual_height):.2f} mm")
+    print(f"Width:  expected {e:.1f} mm, "
+          f"actual {actual_width:.1f} mm, "
+          f"error {abs(e - actual_width):.2f} mm")
+
+# Run validation
+for size in ["M6", "M8", "M10", "M12"]:
+    validate_hex_bolt(size, 30)
+```
+
+  </TabItem>
+</Tabs>
+
+## Socket Head Cap Screw: `make_socket_cap()`
+
+<InArticleAd />
+
+
+<Tabs>
+  <TabItem label="Function Code">
+
+```python
+def make_socket_cap(size, length, thread_type="cosmetic"):
+    """
+    Generate an ISO 4762 socket head cap screw.
+
+    Parameters:
+        size (str): Screw size, e.g. "M5", "M8"
+        length (float): Screw length in mm (below head)
+        thread_type (str): "cosmetic" or "helical"
+
+    Returns:
+        cq.Workplane: Complete socket cap screw solid
+    """
+    td = THREAD_DATA[size]
+    sd = SOCKET_CAP_DATA[size]
+    d = td["d"]
+    P = td["P"]
+    dk = sd["dk"]         # head diameter
+    k = sd["k"]           # head height
+    s_hex = sd["s_hex"]   # hex socket size (across flats)
+
+    # Socket depth is typically 60% of head height
+    socket_depth = k * 0.6
+
+    # ─── Head: cylindrical with hex socket ───
+    head = (
+        cq.Workplane("XY")
+        .circle(dk / 2.0)
+        .extrude(k)
+        .edges(">Z")
+        .chamfer(0.3)
+    )
+
+    # Cut the hex socket into the top of the head
+    hex_across_corners = s_hex / math.cos(math.radians(30))
+    socket_cut = (
+        cq.Workplane("XY")
+        .workplane(offset=k - socket_depth)
+        .polygon(6, hex_across_corners)
+        .extrude(socket_depth + 0.1)  # slight overshoot for clean cut
+    )
+    head = head.cut(socket_cut)
+
+    # ─── Body: determine shank vs thread split ───
+    # ISO 4762: thread length b = 2d + 6 for l <= 125mm
+    b = 2 * d + 6
+    thread_len = min(b, length)
+    shank_len = max(0, length - thread_len)
+
+    # ─── Shank ───
+    if shank_len > 0:
+        shank = (
+            cq.Workplane("XY")
+            .workplane(offset=-shank_len)
+            .circle(d / 2.0)
+            .extrude(shank_len)
+        )
+    else:
+        shank = None
+
+    # ─── Threaded portion ───
+    if thread_type == "helical":
+        thread = make_thread(d, P, thread_len, external=True)
+    else:
+        thread = make_cosmetic_thread(d, P, thread_len, external=True)
+    thread = thread.translate((0, 0, -shank_len - thread_len))
+
+    # ─── Chamfered tip ───
+    # Standard 45-degree chamfer at the screw tip
+
+    # ─── Combine ───
+    screw = head
+    if shank is not None:
+        screw = screw.union(shank)
+    screw = screw.union(thread)
+
+    return screw
+```
+
+  </TabItem>
+  <TabItem label="Usage Example">
+
+```python
+from ocp_vscode import show
+
+# M5x20 socket head cap screw
+shcs_m5 = make_socket_cap("M5", 20)
+show(shcs_m5)
+
+# M8x30 with detailed threads
+shcs_m8 = make_socket_cap("M8", 30, thread_type="helical")
+show(shcs_m8)
+
+# Side-by-side comparison of sizes
+screws = []
+for i, size in enumerate(["M3", "M5", "M8", "M12"]):
+    screw = make_socket_cap(size, 25)
+    screw = screw.translate((i * 25, 0, 0))
+    screws.append(screw)
+show(*screws)
+```
+
+  </TabItem>
+  <TabItem label="Key Differences from Hex Bolt">
+
+**Socket cap screws vs hex bolts:**
+
+| Feature | Hex Bolt (ISO 4014) | Socket Cap (ISO 4762) |
+|---------|--------------------|-----------------------|
+| Head shape | Hexagonal prism | Cylinder with hex socket |
+| Drive type | External hex (wrench) | Internal hex (Allen key) |
+| Head height | Lower profile | Taller for given size |
+| Typical use | General-purpose | Tight spaces, higher torque |
+| Thread length formula | Size-dependent table | $b = 2d + 6$ for $l \leq 125$ mm |
+
+The hex socket is modeled by cutting a regular hexagon into the cylindrical head. The socket size $s$ is the across-flats dimension (the Allen key size you would use). The across-corners dimension for the cut is:
+
+$$e_{socket} = \frac{s}{\cos(30°)} = \frac{2s}{\sqrt{3}}$$
+
+  </TabItem>
+</Tabs>
+
+## Hex Nut: `make_nut()`
+
+<InArticleAd />
+
+
+<Tabs>
+  <TabItem label="Function Code">
+
+```python
+def make_nut(size, thread_type="cosmetic"):
+    """
+    Generate an ISO 4032 hex nut (Style 1).
+
+    Parameters:
+        size (str): Nut size, e.g. "M6", "M10"
+        thread_type (str): "cosmetic" or "helical"
+
+    Returns:
+        cq.Workplane: Complete hex nut solid
+    """
+    td = THREAD_DATA[size]
+    nd = HEX_NUT_DATA[size]
+    d = td["d"]
+    P = td["P"]
+    s = nd["s"]    # across-flats
+    m = nd["m"]    # nut height
+
+    # Calculate across-corners from across-flats
+    e = s / math.cos(math.radians(30))
+
+    # Derived thread dimensions
+    H = (math.sqrt(3) / 2.0) * P
+    d_minor = d - 2 * (5/8) * H
+
+    # ─── Outer body: hexagonal prism ───
+    body = (
+        cq.Workplane("XY")
+        .polygon(6, e)
+        .extrude(m)
+        .edges("|Z")
+        .chamfer(0.4)
+        .edges(">Z or <Z")
+        .chamfer(m * 0.1)
+    )
+
+    # ─── Internal thread bore ───
+    if thread_type == "helical":
+        bore = make_thread(d, P, m, external=False)
+    else:
+        # Cosmetic: simple bore at minor diameter
+        bore = (
+            cq.Workplane("XY")
+            .circle(d / 2.0)      # clearance at nominal diameter
+            .extrude(m)
+        )
+
+    # Cut the bore from the hex body
+    nut = body.cut(bore)
+
+    # ─── Chamfer the bore entries (both sides) ───
+    # 30-degree lead-in chamfer for thread engagement
+    chamfer_depth = P * 0.8
+    top_chamfer = (
+        cq.Workplane("XY")
+        .workplane(offset=m - chamfer_depth)
+        .circle(d / 2.0 + chamfer_depth)
+        .workplane(offset=chamfer_depth)
+        .circle(d / 2.0)
+        .loft()
+    )
+    bottom_chamfer = (
+        cq.Workplane("XY")
+        .circle(d / 2.0)
+        .workplane(offset=chamfer_depth)
+        .circle(d / 2.0 + chamfer_depth)
+        .loft()
+    )
+
+    # These lofted shapes remove material to create the chamfered entry
+    nut = nut.cut(top_chamfer).cut(bottom_chamfer)
+
+    return nut
+```
+
+  </TabItem>
+  <TabItem label="Usage Example">
+
+```python
+from ocp_vscode import show
+
+# Generate individual nuts
+nut_m8 = make_nut("M8")
+show(nut_m8)
+
+# Display a range of sizes side by side
+nuts = []
+for i, size in enumerate(["M4", "M6", "M8", "M10", "M12", "M16"]):
+    nut = make_nut(size)
+    nut = nut.translate((i * 25, 0, 0))
+    nuts.append(nut)
+show(*nuts)
+```
+
+  </TabItem>
+</Tabs>
+
+## Flat Washer: `make_washer()`
+
+<InArticleAd />
+
+
+<Tabs>
+  <TabItem label="Function Code">
+
+```python
+def make_washer(size):
+    """
+    Generate an ISO 7089 flat washer (normal series).
+
+    Parameters:
+        size (str): Washer size, e.g. "M6", "M10"
+
+    Returns:
+        cq.Workplane: Complete flat washer solid
+    """
+    wd = WASHER_DATA[size]
+    d1 = wd["d1"]   # inner diameter
+    d2 = wd["d2"]   # outer diameter
+    h = wd["h"]     # thickness
+
+    # Create the washer as an annular disc
+    washer = (
+        cq.Workplane("XY")
+        .circle(d2 / 2.0)
+        .circle(d1 / 2.0)
+        .extrude(h)
+    )
+
+    # Optional: add a small edge break (0.1 mm chamfer)
+    # This improves printability and matches real washers
+    try:
+        washer = washer.edges().chamfer(min(0.1, h * 0.1))
+    except Exception:
+        pass  # very thin washers may not support chamfer
+
+    return washer
+```
+
+  </TabItem>
+  <TabItem label="Usage Example">
+
+```python
+from ocp_vscode import show
+
+# Single washer
+washer_m10 = make_washer("M10")
+show(washer_m10)
+
+# Stack of washers (visual check)
+washers = []
+offset = 0
+for size in ["M3", "M5", "M8", "M12", "M16", "M20"]:
+    w = make_washer(size)
+    w = w.translate((offset, 0, 0))
+    wd = WASHER_DATA[size]
+    offset += wd["d2"] + 3  # space by outer diameter
+    washers.append(w)
+show(*washers)
+```
+
+  </TabItem>
+</Tabs>
+
+## Fastener Assembly Example
+
+<InArticleAd />
+
+
+With all four functions built, you can assemble a complete bolted joint:
+
+```python
+from ocp_vscode import show
+
+def make_bolted_joint(size, bolt_length, grip_thickness):
+    """
+    Assemble a complete bolted joint:
+    washer + bolt through a plate, washer + nut on the other side.
+
+    Parameters:
+        size (str): Fastener size (e.g., "M8")
+        bolt_length (float): Bolt length in mm
+        grip_thickness (float): Total plate thickness in mm
+    """
+    td = THREAD_DATA[size]
+    hd = HEX_BOLT_DATA[size]
+    wd = WASHER_DATA[size]
+    nd = HEX_NUT_DATA[size]
+
+    # Generate components
+    bolt = make_hex_bolt(size, bolt_length)
+    nut = make_nut(size)
+    washer_top = make_washer(size)
+    washer_bottom = make_washer(size)
+
+    # Plate with clearance hole
+    clearance_dia = td["d"] + 1.0  # 1mm clearance
+    plate = (
+        cq.Workplane("XY")
+        .box(wd["d2"] * 3, wd["d2"] * 3, grip_thickness)
+        .faces(">Z")
+        .workplane()
+        .hole(clearance_dia)
+    )
+
+    # Position everything along the Z axis
+    # Bolt head sits on top washer, on top of plate
+    z_plate_top = grip_thickness / 2.0
+    z_plate_bottom = -grip_thickness / 2.0
+
+    # Top washer sits on plate surface
+    washer_top = washer_top.translate((0, 0, z_plate_top))
+
+    # Bolt head sits on top of washer
+    bolt_z = z_plate_top + wd["h"]
+    bolt = bolt.translate((0, 0, bolt_z))
+
+    # Bottom washer under the plate
+    washer_bottom = washer_bottom.translate(
+        (0, 0, z_plate_bottom - wd["h"])
+    )
+
+    # Nut under the bottom washer
+    nut_z = z_plate_bottom - wd["h"] - nd["m"]
+    nut = nut.translate((0, 0, nut_z))
+
+    return bolt, washer_top, plate, washer_bottom, nut
+
+# Create an M8 bolted joint through a 10mm plate
+components = make_bolted_joint("M8", 35, 10)
+show(*components)
+```
+
+## Batch Library Generation
+
+<InArticleAd />
+
+
+The real power of parametric code-based design is automation. The following script generates your entire hardware library in one run: every size, every type, exported to both STEP (for CNC/assembly) and STL (for 3D printing).
+
+```python
+import os
+import cadquery as cq
+
+def generate_hardware_library(output_dir="hardware_library"):
+    """
+    Generate a complete ISO fastener library.
+
+    Creates subdirectories for each fastener type and exports
+    every size in both STEP and STL formats.
+    """
+    # Create output directory structure
+    dirs = {
+        "bolts": os.path.join(output_dir, "hex_bolts"),
+        "screws": os.path.join(output_dir, "socket_cap_screws"),
+        "nuts": os.path.join(output_dir, "hex_nuts"),
+        "washers": os.path.join(output_dir, "flat_washers"),
+    }
+    for d in dirs.values():
+        os.makedirs(d, exist_ok=True)
+
+    sizes = ["M3", "M4", "M5", "M6", "M8", "M10", "M12", "M14", "M16", "M20"]
+    bolt_lengths = [10, 16, 20, 25, 30, 40, 50]  # common lengths in mm
+
+    file_count = 0
+
+    # ─── Hex Bolts: each size × multiple lengths ───
+    print("Generating hex bolts...")
+    for size in sizes:
+        for length in bolt_lengths:
+            # Skip unreasonable combinations (e.g., M20x10)
+            min_len = HEX_BOLT_DATA[size]["b"]  # minimum = thread length
+            if length < THREAD_DATA[size]["d"] * 1.5:
+                continue
+
+            name = f"ISO4014_{size}x{length}"
+            bolt = make_hex_bolt(size, length)
+
+            cq.exporters.export(bolt, os.path.join(dirs["bolts"], f"{name}.step"))
+            cq.exporters.export(bolt, os.path.join(dirs["bolts"], f"{name}.stl"))
+            file_count += 2
+            print(f"  {name}")
+
+    # ─── Socket Cap Screws: each size × multiple lengths ───
+    print("Generating socket cap screws...")
+    for size in sizes:
+        for length in bolt_lengths:
+            if length < THREAD_DATA[size]["d"] * 1.5:
+                continue
+
+            name = f"ISO4762_{size}x{length}"
+            screw = make_socket_cap(size, length)
+
+            cq.exporters.export(screw, os.path.join(dirs["screws"], f"{name}.step"))
+            cq.exporters.export(screw, os.path.join(dirs["screws"], f"{name}.stl"))
+            file_count += 2
+            print(f"  {name}")
+
+    # ─── Hex Nuts: one per size ───
+    print("Generating hex nuts...")
+    for size in sizes:
+        name = f"ISO4032_{size}"
+        nut = make_nut(size)
+
+        cq.exporters.export(nut, os.path.join(dirs["nuts"], f"{name}.step"))
+        cq.exporters.export(nut, os.path.join(dirs["nuts"], f"{name}.stl"))
+        file_count += 2
+        print(f"  {name}")
+
+    # ─── Flat Washers: one per size ───
+    print("Generating flat washers...")
+    for size in sizes:
+        name = f"ISO7089_{size}"
+        washer = make_washer(size)
+
+        cq.exporters.export(washer, os.path.join(dirs["washers"], f"{name}.step"))
+        cq.exporters.export(washer, os.path.join(dirs["washers"], f"{name}.stl"))
+        file_count += 2
+        print(f"  {name}")
+
+    print(f"\nLibrary complete: {file_count} files generated in '{output_dir}/'")
+    return file_count
+
+# Run the generator
+total = generate_hardware_library()
+```
+
+### Expected Output Structure
+
+After running the batch generator, your directory looks like this:
+
+```
+hardware_library/
+├── hex_bolts/
+│   ├── ISO4014_M3x10.step
+│   ├── ISO4014_M3x10.stl
+│   ├── ISO4014_M3x16.step
+│   ├── ISO4014_M3x16.stl
+│   ├── ...
+│   └── ISO4014_M20x50.stl
+├── socket_cap_screws/
+│   ├── ISO4762_M3x10.step
+│   ├── ...
+│   └── ISO4762_M20x50.stl
+├── hex_nuts/
+│   ├── ISO4032_M3.step
+│   ├── ISO4032_M3.stl
+│   ├── ...
+│   └── ISO4032_M20.stl
+└── flat_washers/
+    ├── ISO7089_M3.step
+    ├── ISO7089_M3.stl
+    ├── ...
+    └── ISO7089_M20.stl
+```
+
+## Extending the Library
+
+<InArticleAd />
+
+
+<CardGrid>
+  <Card title="Add More Fastener Types" icon="add-document">
+    The same pattern works for countersunk screws (ISO 10642), set screws (ISO 4029), flange bolts (ISO 4162), and lock nuts (ISO 7040). Just add the standards table and write the geometry function.
+  </Card>
+  <Card title="Fine-Pitch Threads" icon="setting">
+    The `THREAD_DATA` dictionary currently has coarse-pitch entries. Add fine-pitch data from ISO 261 (e.g., M8x1.0 instead of M8x1.25) and pass it to the same functions.
+  </Card>
+  <Card title="Material Properties" icon="information">
+    Extend the dictionaries with material grade data (property class 8.8, 10.9, 12.9) and attach metadata to exported files. Useful for FEA preloading and BOM generation.
+  </Card>
+  <Card title="Assembly Automation" icon="rocket">
+    Write a function that reads a bolt pattern (list of hole positions) and places the correct bolt + washer + nut at each location automatically. This is the foundation of automated assembly.
+  </Card>
+</CardGrid>
+
+### Adding a Countersunk Screw (Exercise)
+
+As practice, try adding ISO 10642 (countersunk socket head cap screw) to the library. Here are the key dimensions to start with:
+
+```python
+# ISO 10642: Countersunk socket head cap screw
+COUNTERSUNK_DATA = {
+    "M3":  {"dk": 6.72,  "k": 1.86,  "s_hex": 2.0},
+    "M4":  {"dk": 8.96,  "k": 2.48,  "s_hex": 2.5},
+    "M5":  {"dk": 11.20, "k": 3.10,  "s_hex": 3.0},
+    "M6":  {"dk": 13.44, "k": 3.72,  "s_hex": 4.0},
+    "M8":  {"dk": 17.92, "k": 4.96,  "s_hex": 5.0},
+    "M10": {"dk": 22.40, "k": 6.20,  "s_hex": 6.0},
+}
+
+def make_countersunk(size, length, thread_type="cosmetic"):
+    """
+    Generate an ISO 10642 countersunk socket head cap screw.
+
+    The head is a truncated cone (90-degree included angle)
+    with a hex socket in the flat top.
+    """
+    td = THREAD_DATA[size]
+    cd = COUNTERSUNK_DATA[size]
+    d = td["d"]
+    P = td["P"]
+    dk = cd["dk"]        # head outer diameter
+    k = cd["k"]          # head height (cone depth)
+    s_hex = cd["s_hex"]  # socket size
+
+    # ─── Head: truncated cone ───
+    head = (
+        cq.Workplane("XY")
+        .circle(dk / 2.0)                # bottom of cone (flush surface)
+        .workplane(offset=k)
+        .circle(d / 2.0)                  # top of cone (meets shank)
+        .loft()
+    )
+
+    # Cut hex socket
+    hex_e = s_hex / math.cos(math.radians(30))
+    socket_depth = k * 0.55
+    socket_cut = (
+        cq.Workplane("XY")
+        .polygon(6, hex_e)
+        .extrude(socket_depth)
+    )
+    head = head.cut(socket_cut)
+
+    # ─── Body (thread) ───
+    # For countersunk, almost the entire length is threaded
+    if thread_type == "helical":
+        thread = make_thread(d, P, length, external=True)
+    else:
+        thread = make_cosmetic_thread(d, P, length, external=True)
+    thread = thread.translate((0, 0, k))  # starts at top of cone
+
+    return head.union(thread)
+```
+
+## Summary
+
+<InArticleAd />
+
+
+<Card title="What You Built" icon="approve-check">
+In this lesson, you built a complete parametric hardware library from ISO engineering standards:
+
+- **Environment**: CadQuery + Jupyter + OCP CAD Viewer for interactive code-based CAD
+- **Data layer**: ISO 261, 4014, 4762, 4032, and 7089 dimensions as Python dictionaries
+- **Thread generation**: both detailed helical sweep and fast cosmetic representations
+- **Four parametric functions**: `make_hex_bolt()`, `make_socket_cap()`, `make_nut()`, `make_washer()`
+- **Batch export**: automated generation of 50+ STEP/STL files in organized directories
+- **Assembly**: complete bolted joint from individual components
+
+Every part is parametric: change a size string and the entire model regenerates from standards data. This library becomes the foundation for assemblies in all subsequent lessons.
+</Card>
+
+:::tip[Next Lesson]
+In [Lesson 2: Involute Gear Systems](./involute-gear-systems), you will apply the same parametric approach to a far more complex geometry problem: generating mathematically-perfect involute gears from parametric equations, meshing pairs from center-distance calculations, and a complete gear train with housing.
+:::
+
+<CodeBasedMechanicalDesignComments />
+
+
+
+<InArticleAd />
+<TawkWidget />
+<Copyright />
