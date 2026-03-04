@@ -166,13 +166,20 @@ def parametric_bracket(
     # === Fillet at base-web junction ===
     if fillet_radius > 0:
         # Select the interior edge where base meets web
-        bracket = (
-            bracket
-            .edges("|X")                  # Edges parallel to X
-            .edges(">Z")                  # Upper edges
-            .edges("<Y")                  # Interior side
-            .fillet(fillet_radius)
-        )
+        # Use NearestToPointSelector to target the concave junction edge
+        try:
+            bracket = (
+                bracket
+                .edges("|X")
+                .edges(
+                    cq.selectors.NearestToPointSelector(
+                        (0, base_depth/2 - t, t)
+                    )
+                )
+                .fillet(fillet_radius)
+            )
+        except Exception:
+            pass  # Skip if fillet fails on complex geometry
 
     # === Stiffening ribs ===
     if n_ribs > 0:

@@ -335,12 +335,13 @@ def make_spur_gear(module, num_teeth, width, pressure_angle_deg=20.0,
         all_points.append((root_x, root_y))
 
     # ─── Create the 2D profile as a CadQuery wire ───
-    # Use a spline through all the points to create a smooth profile
+    # Close the loop by repeating the first point, then use polyline
+    all_points.append(all_points[0])
     wp = cq.Workplane("XY")
-    gear_wire = wp.spline(all_points, periodic=True)
+    gear_profile = wp.polyline(all_points).close()
 
     # Extrude to create the 3D gear body
-    gear = gear_wire.close().extrude(width)
+    gear = gear_profile.extrude(width)
 
     # ─── Add bore if specified ───
     if bore_diameter > 0:
