@@ -43,26 +43,36 @@ By the end of this lesson, you will be able to:
 <InArticleAd />
 
 
-Before writing any CAD code, you need three tools: **CadQuery** (the geometry kernel), **Jupyter** (the interactive notebook), and **OCP CAD Viewer** (the 3D visualizer for VS Code).
+Before writing any CAD code, you need three tools: **CadQuery** (the geometry kernel), **Jupyter** (the interactive notebook), and **OCP CAD Viewer** (the 3D visualizer for VS Code). CadQuery requires **Python 3.9 or newer** (3.10+ recommended). Check your version with `python3 --version` before proceeding.
+
+<Tabs>
+  <TabItem label="pip (Linux/macOS)">
 
 <Steps>
-1. **Create a virtual environment** (recommended to avoid package conflicts):
+1. **Create a virtual environment with Python 3.10+**:
    ```bash
-   python -m venv cadquery-env
-   source cadquery-env/bin/activate  # Linux/macOS
-   # cadquery-env\Scripts\activate   # Windows
+   python3.10 -m venv cadquery-env
+   source cadquery-env/bin/activate
+   ```
+   If `python3.10` is not available, install it first:
+   ```bash
+   # Ubuntu/Debian
+   sudo apt install python3.10 python3.10-venv
+
+   # macOS (Homebrew)
+   brew install python@3.10
    ```
 
-2. **Install CadQuery and supporting tools**:
+2. **Install CadQuery, the viewer, and Jupyter**:
    ```bash
    pip install --upgrade pip
-   pip install cadquery ocp-cad-viewer jupyter
+   pip install cadquery ocp-vscode jupyter
    ```
 
 3. **Install the OCP CAD Viewer extension in VS Code**:
    Open VS Code, go to Extensions (Ctrl+Shift+X), search for "OCP CAD Viewer," and install it. This gives you a live 3D viewport that updates as you run CadQuery scripts.
 
-4. **Start Jupyter and verify the installation**:
+4. **Verify the installation**:
    ```bash
    jupyter notebook
    ```
@@ -70,30 +80,92 @@ Before writing any CAD code, you need three tools: **CadQuery** (the geometry ke
    ```python
    import cadquery as cq
 
-   # Quick verification: a simple box
    box = cq.Workplane("XY").box(10, 10, 10)
    cq.exporters.export(box, "test_box.step")
    print("CadQuery is working! Exported test_box.step")
    ```
-   If you are using VS Code with the OCP CAD Viewer extension, you can also visualize interactively:
+   If you have VS Code with OCP CAD Viewer, you can also visualize interactively:
    ```python
    from ocp_vscode import show
    show(box)
    ```
-
-5. **Alternative: use CQ-editor** if you prefer a standalone GUI:
-   ```bash
-   pip install cq-editor
-   ```
-   CQ-editor includes a built-in 3D viewer and code editor, but this course assumes the Jupyter + OCP workflow.
 </Steps>
 
-:::tip[Conda Alternative]
-If you use Anaconda/Miniconda, CadQuery is also available via conda-forge:
-```bash
-conda install -c conda-forge cadquery
-```
-This can resolve OpenCASCADE build issues on some systems.
+</TabItem>
+<TabItem label="pip (Windows)">
+
+<Steps>
+1. **Install Python 3.10+ from [python.org](https://www.python.org/downloads/)**. During installation, check "Add Python to PATH."
+
+2. **Create a virtual environment**:
+   ```bash
+   python -m venv cadquery-env
+   cadquery-env\Scripts\activate
+   ```
+
+3. **Install CadQuery, the viewer, and Jupyter**:
+   ```bash
+   pip install --upgrade pip
+   pip install cadquery ocp-vscode jupyter
+   ```
+
+4. **Install the OCP CAD Viewer extension in VS Code**:
+   Open VS Code, go to Extensions (Ctrl+Shift+X), search for "OCP CAD Viewer," and install it.
+
+5. **Verify the installation**:
+   ```bash
+   jupyter notebook
+   ```
+   Create a new notebook and run:
+   ```python
+   import cadquery as cq
+
+   box = cq.Workplane("XY").box(10, 10, 10)
+   cq.exporters.export(box, "test_box.step")
+   print("CadQuery is working! Exported test_box.step")
+   ```
+</Steps>
+
+:::tip[WSL Alternative]
+If you run into build issues with CadQuery on native Windows, consider using **Windows Subsystem for Linux (WSL)**. Install WSL with `wsl --install` from PowerShell, then follow the Linux/macOS tab instructions inside your WSL terminal. VS Code connects to WSL seamlessly via the "WSL" extension.
+:::
+
+</TabItem>
+<TabItem label="Conda (all platforms)">
+
+Conda is the [recommended approach](https://cadquery.readthedocs.io/en/latest/installation.html) from the CadQuery team and handles the OpenCASCADE binary dependencies automatically.
+
+<Steps>
+1. **Create a conda environment**:
+   ```bash
+   conda create -n cadquery-env python=3.10
+   conda activate cadquery-env
+   ```
+
+2. **Install CadQuery**:
+   ```bash
+   conda install -c conda-forge cadquery
+   ```
+
+3. **Install Jupyter and the VS Code viewer**:
+   ```bash
+   pip install ocp-vscode jupyter
+   ```
+
+4. **Verify the installation** (same as the pip tab):
+   ```python
+   import cadquery as cq
+   box = cq.Workplane("XY").box(10, 10, 10)
+   cq.exporters.export(box, "test_box.step")
+   print("CadQuery is working!")
+   ```
+</Steps>
+
+</TabItem>
+</Tabs>
+
+:::caution[Python Version]
+CadQuery 2.x requires **Python 3.9+** and the OCP CAD Viewer requires **Python 3.10+**. If `pip install cadquery` installs version 1.x (e.g. 1.2.5), your Python is too old. Run `python3 --version` to check, and use a newer Python to create your virtual environment.
 :::
 
 ## ISO Standards Reference
