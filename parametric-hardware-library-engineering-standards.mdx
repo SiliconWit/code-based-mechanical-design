@@ -63,16 +63,13 @@ Before writing any CAD code, you need three tools: **CadQuery** (the geometry ke
    brew install python@3.10
    ```
 
-2. **Install CadQuery, the viewer, and Jupyter**:
+2. **Install CadQuery and Jupyter**:
    ```bash
    pip install --upgrade pip
    pip install cadquery ocp-vscode jupyter
    ```
 
-3. **Install the OCP CAD Viewer extension in VS Code**:
-   Open VS Code, go to Extensions (Ctrl+Shift+X), search for "OCP CAD Viewer," and install it. This gives you a live 3D viewport that updates as you run CadQuery scripts.
-
-4. **Verify the installation**:
+3. **Verify the installation**:
    ```bash
    jupyter notebook
    ```
@@ -82,14 +79,20 @@ Before writing any CAD code, you need three tools: **CadQuery** (the geometry ke
 
    box = cq.Workplane("XY").box(10, 10, 10)
    cq.exporters.export(box, "test_box.step")
-   print("CadQuery is working! Exported test_box.step")
+   cq.exporters.export(box, "test_box.stl")
+   print("CadQuery is working! Exported test_box.step and test_box.stl")
    ```
-   If you have VS Code with OCP CAD Viewer, you can also visualize interactively:
-   ```python
-   from ocp_vscode import show
-   show(box)
-   ```
+   Open the exported `.step` file in FreeCAD or any CAD viewer to confirm the geometry looks correct.
 </Steps>
+
+:::tip[Live 3D Preview in VS Code (Optional)]
+For interactive visualization without exporting files, install the **OCP CAD Viewer** extension in VS Code (Extensions > search "OCP CAD Viewer"). Then run your notebooks from a VS Code terminal so the extension can connect. With the extension active, you can call:
+```python
+from ocp_vscode import show
+show(box)
+```
+Note: `show()` only works when the OCP CAD Viewer extension is running inside VS Code. In standalone Jupyter or other editors, use the STEP/STL export workflow above.
+:::
 
 </TabItem>
 <TabItem label="pip (Windows)">
@@ -109,10 +112,7 @@ Before writing any CAD code, you need three tools: **CadQuery** (the geometry ke
    pip install cadquery ocp-vscode jupyter
    ```
 
-4. **Install the OCP CAD Viewer extension in VS Code**:
-   Open VS Code, go to Extensions (Ctrl+Shift+X), search for "OCP CAD Viewer," and install it.
-
-5. **Verify the installation**:
+4. **Verify the installation**:
    ```bash
    jupyter notebook
    ```
@@ -122,8 +122,10 @@ Before writing any CAD code, you need three tools: **CadQuery** (the geometry ke
 
    box = cq.Workplane("XY").box(10, 10, 10)
    cq.exporters.export(box, "test_box.step")
-   print("CadQuery is working! Exported test_box.step")
+   cq.exporters.export(box, "test_box.stl")
+   print("CadQuery is working! Exported test_box.step and test_box.stl")
    ```
+   Open the exported `.step` file in FreeCAD or any CAD viewer to confirm the geometry.
 </Steps>
 
 :::tip[WSL Alternative]
@@ -152,12 +154,14 @@ Conda is the [recommended approach](https://cadquery.readthedocs.io/en/latest/in
    pip install ocp-vscode jupyter
    ```
 
-4. **Verify the installation** (same as the pip tab):
+4. **Verify the installation**:
    ```python
    import cadquery as cq
+
    box = cq.Workplane("XY").box(10, 10, 10)
    cq.exporters.export(box, "test_box.step")
-   print("CadQuery is working!")
+   cq.exporters.export(box, "test_box.stl")
+   print("CadQuery is working! Exported test_box.step and test_box.stl")
    ```
 </Steps>
 
