@@ -163,9 +163,9 @@ def cubic_unit_cell(cell_size: float, strut_diameter: float) -> cq.Workplane:
     for x in [0, L]:
         for y in [0, L]:
             for z in [0, L]:
-                node = cq.Workplane("XY").transformed(
-                    offset=(x, y, z)
-                ).sphere(r * 1.2)
+                node = cq.Workplane("XY").newObject([
+                    cq.Solid.makeSphere(r * 1.2, pnt=cq.Vector(x, y, z))
+                ])
                 result = result.union(node)
 
     return result
@@ -261,9 +261,9 @@ def bcc_unit_cell(cell_size: float, strut_diameter: float) -> cq.Workplane:
     # Add spherical nodes
     all_nodes = corners + [center]
     for node_pos in all_nodes:
-        node = cq.Workplane("XY").transformed(
-            offset=node_pos
-        ).sphere(r * 1.3)
+        node = cq.Workplane("XY").newObject([
+            cq.Solid.makeSphere(r * 1.3, pnt=cq.Vector(*node_pos))
+        ])
         result = result.union(node)
 
     return result
@@ -349,9 +349,9 @@ def octet_truss_unit_cell(cell_size: float,
 
     # Spherical joints at all nodes
     for pos in all_nodes:
-        node = cq.Workplane("XY").transformed(
-            offset=pos
-        ).sphere(r * 1.4)
+        node = cq.Workplane("XY").newObject([
+            cq.Solid.makeSphere(r * 1.4, pnt=cq.Vector(*pos))
+        ])
         result = result.union(node)
 
     return result

@@ -601,11 +601,8 @@ def make_hex_bolt(size, length, thread_type="cosmetic"):
 
     # ─── Thread tip: 45-degree chamfer on the end ───
     chamfer_height = d * 0.3
-    tip_cut = (
-        cq.Workplane("XY")
-        .workplane(offset=thread_start_z)
-        .cone(d / 2.0, 0, chamfer_height, centered=(True, True, False))
-        .translate((0, 0, -chamfer_height))
+    tip_cone = cq.Solid.makeCone(d / 2.0, 0, chamfer_height).moved(
+        cq.Location(cq.Vector(0, 0, thread_start_z - chamfer_height))
     )
 
     # ─── Assembly ───
