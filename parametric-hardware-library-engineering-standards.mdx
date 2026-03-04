@@ -55,11 +55,12 @@ Before writing any CAD code, you need three tools: **CadQuery** (the geometry ke
 
 2. **Install CadQuery and supporting tools**:
    ```bash
-   pip install cadquery ocp-vscode jupyter
+   pip install --upgrade pip
+   pip install cadquery ocp-cad-viewer jupyter
    ```
 
 3. **Install the OCP CAD Viewer extension in VS Code**:
-   Open VS Code, go to Extensions (Ctrl+Shift+X), search for "OCP CAD Viewer," and install it. This gives you a live 3D viewport that updates as you run cells.
+   Open VS Code, go to Extensions (Ctrl+Shift+X), search for "OCP CAD Viewer," and install it. This gives you a live 3D viewport that updates as you run CadQuery scripts.
 
 4. **Start Jupyter and verify the installation**:
    ```bash
@@ -68,13 +69,17 @@ Before writing any CAD code, you need three tools: **CadQuery** (the geometry ke
    Create a new notebook and run:
    ```python
    import cadquery as cq
-   from ocp_vscode import show
 
-   # Quick verification — a simple box
+   # Quick verification: a simple box
    box = cq.Workplane("XY").box(10, 10, 10)
+   cq.exporters.export(box, "test_box.step")
+   print("CadQuery is working! Exported test_box.step")
+   ```
+   If you are using VS Code with the OCP CAD Viewer extension, you can also visualize interactively:
+   ```python
+   from ocp_vscode import show
    show(box)
    ```
-   If you see a 10 mm cube in the OCP CAD Viewer panel, your setup is working.
 
 5. **Alternative: use CQ-editor** if you prefer a standalone GUI:
    ```bash
