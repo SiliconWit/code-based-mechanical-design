@@ -15,7 +15,7 @@ import Copyright from '../../../../components/Copyright.astro';
 import BionicText from '../../../../components/BionicText.astro';
 import TailwindWrapper from '../../../../components/TailwindWrapper.jsx';
 import { Tabs, TabItem } from '@astrojs/starlight/components';
-import { Card, CardGrid, Badge, Steps, LinkButton } from '@astrojs/starlight/components';
+import { Card, CardGrid, Badge, Steps, LinkButton, FileTree } from '@astrojs/starlight/components';
 
 <UniversalContentContributors 
   contributors={frontmatter.contributors}
@@ -60,6 +60,29 @@ Create a working directory for this lesson's scripts and output:
 mkdir -p lesson-0/output
 cd lesson-0
 ```
+
+After completing this lesson, your folder should look like this:
+
+<FileTree>
+- lesson-0/
+  - **export_helper.py**
+  - 01_lego_brick.py
+  - 02_honeycomb_coaster.py
+  - 03_math_vase.py
+  - 04_twisted_tower.py
+  - 05_perforated_plate.py
+  - 06_cable_organizer.py
+  - 07_spring.py
+  - 08_planetary_gears.py
+  - **run_all.py**
+  - output/
+    - 01_lego_brick.step
+    - 01_lego_brick.stl
+    - 01_lego_brick.glb
+    - …
+</FileTree>
+
+Each script produces three files: `.step` for precise CAD editing in FreeCAD, `.stl` for 3D printing, and `.glb` for colored 3D viewing in a browser.
 
 ## Export Helper
 
