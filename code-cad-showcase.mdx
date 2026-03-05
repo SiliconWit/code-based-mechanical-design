@@ -29,36 +29,45 @@ Before diving into engineering problems, let's see what code-based CAD can actua
 
 ## Environment Setup
 
-You need Python 3.10+ and four packages: CadQuery for 3D modeling, trimesh for GLB export, NumPy for array operations, and SciPy for mesh color processing. Create a virtual environment and install everything:
+Start by creating a project folder and a virtual environment, then install the four packages you need: CadQuery for 3D modeling, trimesh for GLB export, NumPy for array operations, and SciPy for mesh color processing.
 
 <Tabs>
-<TabItem label="pip (Linux/macOS)">
+<TabItem label="Linux/macOS">
 ```bash
+mkdir -p lesson-0/output
+cd lesson-0
 python3 -m venv cadquery-env
 source cadquery-env/bin/activate
 pip install cadquery trimesh numpy scipy
 ```
 </TabItem>
-<TabItem label="pip (Windows)">
-```bash
+<TabItem label="Windows (CMD)">
+```batch
+mkdir lesson-0
+mkdir lesson-0\output
+cd lesson-0
 python -m venv cadquery-env
 cadquery-env\Scripts\activate
 pip install cadquery trimesh numpy scipy
 ```
 </TabItem>
-</Tabs>
-
-Verify the installation by running a quick test:
-
-```bash
-python -c "import cadquery, trimesh, numpy, scipy; print('All packages installed OK')"
-```
-
-Create a working directory for this lesson's scripts and output:
+<TabItem label="Windows (WSL)">
+If you have [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) set up, you can use the same Linux commands inside your WSL terminal:
 
 ```bash
 mkdir -p lesson-0/output
 cd lesson-0
+python3 -m venv cadquery-env
+source cadquery-env/bin/activate
+pip install cadquery trimesh numpy scipy
+```
+</TabItem>
+</Tabs>
+
+Verify the installation:
+
+```bash
+python -c "import cadquery, trimesh, numpy, scipy; print('All packages installed OK')"
 ```
 
 After completing this lesson, your folder should look like this:
