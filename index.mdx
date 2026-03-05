@@ -53,28 +53,39 @@ Each lesson follows a consistent approach:
 
 ## Lessons
 
-<Steps>
-1. **[Parametric Hardware Library from Engineering Standards](./parametric-hardware-library-engineering-standards)**
-   Build a reusable library of ISO-standard fasteners (hex bolts, socket cap screws, nuts, and washers) generated from standards tables. Set up CadQuery, Jupyter, and OCP CAD Viewer. Output: 50+ standard parts as STEP/STL files.
+<CardGrid>
+  <Card title="Lesson 0: Code-Based CAD in Action" icon="star">
+    [Start here](./code-cad-showcase). Set up your Python environment and run 8 complete CadQuery scripts that produce colorful 3D models, from parametric Lego bricks to planetary gear sets. Each example highlights what becomes possible when your CAD model is a Python script, and by the end you will have a working CadQuery setup ready for the rest of the course.
+  </Card>
 
-2. **[Involute Gear Systems](./involute-gear-systems)**
-   Generate mathematically-perfect involute gears from parametric equations. Build single gears, meshing pairs, and a complete gear train with housing. Cover Lewis bending stress, contact ratio, and backlash. Output: 3D-printable gear train assembly.
+  <Card title="Lesson 1: Parametric Hardware Library" icon="document">
+    [Parametric Hardware Library from Engineering Standards](./parametric-hardware-library-engineering-standards). Build a reusable library of ISO-standard fasteners (hex bolts, socket cap screws, nuts, and washers) generated from standards tables. Set up CadQuery, Jupyter, and OCP CAD Viewer. Output: 50+ standard parts as STEP/STL files.
+  </Card>
 
-3. **[Custom Enclosure from PCB Data](./custom-enclosure-pcb-data)**
-   Parse KiCad PCB files to auto-generate enclosures with standoffs, port cutouts, ventilation, snap-fits, and lids. Output: print-ready enclosure for a real board (e.g., Raspberry Pi).
+  <Card title="Lesson 2: Involute Gear Systems" icon="document">
+    [Involute Gear Systems](./involute-gear-systems). Generate mathematically-perfect involute gears from parametric equations. Build single gears, meshing pairs, and a complete gear train with housing. Cover Lewis bending stress, contact ratio, and backlash. Output: 3D-printable gear train assembly.
+  </Card>
 
-4. **[Heat Sink Design & Thermal Optimization](./heat-sink-design-thermal-optimization)**
-   Model thermal resistance from junction to ambient. Compare straight, pin-fin, and radial fin geometries. Sweep parameters and visualize thermal performance maps with matplotlib. Output: optimized heat sink with thermal justification.
+  <Card title="Lesson 3: Custom Enclosure from PCB" icon="document">
+    [Custom Enclosure from PCB Data](./custom-enclosure-pcb-data). Parse KiCad PCB files to auto-generate enclosures with standoffs, port cutouts, ventilation, snap-fits, and lids. Output: print-ready enclosure for a real board (e.g., Raspberry Pi).
+  </Card>
 
-5. **[Lattice Structures & TPMS for Additive Manufacturing](./lattice-structures-tpms-additive-manufacturing)**
-   Generate strut-based lattices (cubic, BCC, octet-truss) and TPMS surfaces (gyroid, Schwarz-P, diamond). Implement graded density and conformal lattices. Address printability constraints. Output: lightweight structural parts for SLA/SLS/FDM.
+  <Card title="Lesson 4: Heat Sink Optimization" icon="document">
+    [Heat Sink Design & Thermal Optimization](./heat-sink-design-thermal-optimization). Model thermal resistance from junction to ambient. Compare straight, pin-fin, and radial fin geometries. Sweep parameters and visualize thermal performance maps with matplotlib. Output: optimized heat sink with thermal justification.
+  </Card>
 
-6. **[Spring Design with Engineering Stress Verification](./spring-design-stress-verification)**
-   Design compression, extension, and torsion springs from load requirements. Generate helical geometry with CadQuery wire sweeps. Apply Wahl correction factor and Goodman fatigue analysis. Output: springs designed to specific load and life requirements.
+  <Card title="Lesson 5: Lattice Structures & TPMS" icon="document">
+    [Lattice Structures & TPMS for Additive Manufacturing](./lattice-structures-tpms-additive-manufacturing). Generate strut-based lattices (cubic, BCC, octet-truss) and TPMS surfaces (gyroid, Schwarz-P, diamond). Implement graded density and conformal lattices. Address printability constraints. Output: lightweight structural parts for SLA/SLS/FDM.
+  </Card>
 
-7. **[FEA-Driven Structural Optimization](./fea-driven-structural-optimization)**
-   Close the loop between CadQuery and FreeCAD FEM. Generate parametric brackets, mesh and solve with CalculiX, record results, sweep parameters, and plot Pareto fronts (mass vs. stress). Output: optimized bracket with full FEA justification.
-</Steps>
+  <Card title="Lesson 6: Spring Design" icon="document">
+    [Spring Design with Engineering Stress Verification](./spring-design-stress-verification). Design compression, extension, and torsion springs from load requirements. Generate helical geometry with CadQuery wire sweeps. Apply Wahl correction factor and Goodman fatigue analysis. Output: springs designed to specific load and life requirements.
+  </Card>
+
+  <Card title="Lesson 7: FEA-Driven Optimization" icon="document">
+    [FEA-Driven Structural Optimization](./fea-driven-structural-optimization). Close the loop between CadQuery and FreeCAD FEM. Generate parametric brackets, mesh and solve with CalculiX, record results, sweep parameters, and plot Pareto fronts (mass vs. stress). Output: optimized bracket with full FEA justification.
+  </Card>
+</CardGrid>
 
 ## Prerequisites
 
@@ -93,18 +104,23 @@ Each lesson follows a consistent approach:
 ## Getting Started
 
 <Steps>
-1. **Install CadQuery and tools** (requires Python 3.10+)
+1. **Set up a virtual environment** (requires Python 3.10+)
    ```bash
-   pip install cadquery ocp-vscode jupyter trimesh
+   python3 -m venv cadquery-env
+   source cadquery-env/bin/activate   # Windows: cadquery-env\Scripts\activate
+   pip install cadquery trimesh numpy scipy
    ```
+   This gives you everything needed to run every example in the course, starting from Lesson 0.
 
-2. **Start with Lesson 1**, which sets up your environment and builds a reusable parts library
+2. **Start with [Lesson 0: Code-Based CAD in Action](./code-cad-showcase)**. It walks you through 8 short scripts that produce colorful 3D models you can view in [SiliconWit's GLB Viewer](https://siliconwit.com/product-development/glb-viewer/). By the end you will have a working environment and a feel for what code-based CAD can do.
 
-3. **Work through lessons sequentially**, as each builds on patterns from earlier lessons
+3. **Move to [Lesson 1](./parametric-hardware-library-engineering-standards)**, which adds Jupyter and OCP CAD Viewer for interactive development, then builds a reusable parts library from ISO standards.
 
-4. **Modify parameters and experiment**: the whole point of code-based design is easy iteration
+4. **Work through lessons sequentially**, as each builds on patterns from earlier lessons.
 
-5. **Export and manufacture**: every lesson produces STEP/STL files ready for production
+5. **Modify parameters and experiment**: the whole point of code-based design is easy iteration.
+
+6. **Export and manufacture**: every lesson produces STEP/STL files ready for production.
 </Steps>
 
 :::tip[Coming from FreeCAD?]
