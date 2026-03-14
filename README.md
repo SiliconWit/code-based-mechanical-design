@@ -12,6 +12,8 @@ sidebar:
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Contributors Welcome](https://img.shields.io/badge/contributors-welcome-orange)
 
+**Read this course at:** [https://siliconwit.com/education/code-based-mechanical-design/](https://siliconwit.com/education/code-based-mechanical-design/)
+
 A course on programmatic CAD using CadQuery and Python. Covers parametric hardware libraries from engineering standards, involute gear generation, custom enclosures from PCB data, heat sink thermal optimization, lattice structures for additive manufacturing, spring design with stress verification, and FEA-driven structural optimization. Every lesson produces manufacturable STEP and STL output.
 
 ## Lessons
