@@ -15,7 +15,7 @@ import Copyright from '../../../../components/Copyright.astro';
 import BionicText from '../../../../components/BionicText.astro';
 import TailwindWrapper from '../../../../components/TailwindWrapper.jsx';
 import { Tabs, TabItem } from '@astrojs/starlight/components';
-import { Card, CardGrid, Badge, Steps, LinkButton } from '@astrojs/starlight/components';
+import { Card, CardGrid, Badge, Steps, LinkButton, FileTree } from '@astrojs/starlight/components';
 
 <UniversalContentContributors 
   contributors={frontmatter.contributors}
@@ -25,7 +25,7 @@ import { Card, CardGrid, Badge, Steps, LinkButton } from '@astrojs/starlight/com
 
 import CodeBasedMechanicalDesignComments from '../../../../components/code-based-mechanical-design/CodeBasedMechanicalDesignComments.astro';
 
-Close the loop between parametric CAD and finite element analysis in this capstone project. You will build an automated pipeline where CadQuery generates bracket geometry, FreeCAD FEM meshes and solves with CalculiX, and Python sweeps a 3D parameter space to produce a Pareto front of mass versus stress for optimal design selection. #FEA #StructuralOptimization #Capstone
+Optimizing a mechanical part by hand means changing a dimension in CAD, re-meshing in the FEA tool, running the solver, recording the result, and repeating. With three parameters and five values each, that is 125 iterations, each taking several minutes of manual work. Most engineers give up after a dozen and pick "good enough." An automated pipeline eliminates the tedium: CadQuery generates geometry, FreeCAD FEM meshes and solves with CalculiX, and Python sweeps the entire parameter space overnight. In this capstone you will build that pipeline and produce a Pareto front of mass versus stress that shows every optimal tradeoff at a glance. #FEA #StructuralOptimization #Capstone
 
 ## Learning Objectives
 
@@ -43,6 +43,18 @@ By the end of this lesson, you will be able to:
 
 
 The core idea is a closed-loop pipeline where geometry generation, simulation, and result extraction are all automated:
+
+```mermaid
+%%{init: {'flowchart': {'curve': 'linear'}}}%%
+flowchart LR
+    A["Parameter Set\n(thickness, ribs, fillet)"] -->|CadQuery| B["STEP\nGeometry"]
+    B -->|FreeCAD API| C["Mesh +\nBCs + Loads"]
+    C -->|CalculiX| D["FEA\nSolver"]
+    D --> E["Extract\nMass + Stress"]
+    E --> F["Store in\nData Table"]
+    F -->|Next config| A
+    F -->|All done| G["Pareto Front\nAnalysis"]
+```
 
 <Steps>
 1. **CadQuery generates geometry**: a parametric bracket with design variables (wall thickness $t$, rib count $n_r$, fillet radius $r_f$)

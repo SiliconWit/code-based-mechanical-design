@@ -15,7 +15,7 @@ import Copyright from '../../../../components/Copyright.astro';
 import BionicText from '../../../../components/BionicText.astro';
 import TailwindWrapper from '../../../../components/TailwindWrapper.jsx';
 import { Tabs, TabItem } from '@astrojs/starlight/components';
-import { Card, CardGrid, Badge, Steps, LinkButton } from '@astrojs/starlight/components';
+import { Card, CardGrid, Badge, Steps, LinkButton, FileTree } from '@astrojs/starlight/components';
 
 <UniversalContentContributors 
   contributors={frontmatter.contributors}
@@ -25,7 +25,7 @@ import { Card, CardGrid, Badge, Steps, LinkButton } from '@astrojs/starlight/com
 
 import CodeBasedMechanicalDesignComments from '../../../../components/code-based-mechanical-design/CodeBasedMechanicalDesignComments.astro';
 
-Design optimized heat sinks by modeling the full thermal resistance chain from junction to ambient air. You will compare straight-fin, pin-fin, and radial fin geometries in CadQuery, sweep parameters with Python to build thermal performance maps, and select the best configuration for your power budget and manufacturing constraints. #ThermalDesign #HeatSink #CadQuery
+A chip rated for 125 degrees C junction temperature will throttle, glitch, or fail permanently if the heat sink cannot dissipate its power budget. Picking a heat sink from a catalog is a gamble unless you understand the full thermal resistance chain from junction to ambient, and the right fin geometry depends on airflow, orientation, and available space in ways that are not obvious from a datasheet alone. In this lesson you will model that resistance chain from first principles, compare straight-fin, pin-fin, and radial fin geometries in CadQuery, and sweep parameters with Python to build thermal performance maps that show exactly which configuration keeps your chip cool. #ThermalDesign #HeatSink #CadQuery
 
 ## Learning Objectives
 
@@ -43,6 +43,31 @@ By the end of this lesson, you will be able to:
 
 <InArticleAd />
 
+
+```text
+  Thermal Resistance Chain (Junction to Ambient)
+  ──────────────────────────────────────────
+  Tj (junction)
+    │
+    ├── Rjc (junction to case)     0.5-3.0 C/W
+    │   Package type, die attach
+    │
+    ├── Rcs (case to sink)         0.1-2.0 C/W
+    │   Thermal paste or pad
+    │
+    ├── Rsa (sink to ambient)      ← We design this
+    │   Fin geometry, airflow
+    │
+    ▼
+  Ta (ambient air)
+
+  Tj = Ta + Q × (Rjc + Rcs + Rsa)
+
+  Analogy: series electrical circuit
+  Q (watts) = I (amps)
+  dT (degrees) = V (volts)
+  R_thermal = R_electrical
+```
 
 Heat flows from the semiconductor junction through a series of thermal resistances to the surrounding air. Each resistance is analogous to an electrical resistor in a series circuit.
 
