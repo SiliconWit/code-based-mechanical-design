@@ -46,7 +46,7 @@ The core idea is a closed-loop pipeline where geometry generation, simulation, a
 
 ```mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
-flowchart LR
+flowchart TD
     A["Parameter Set\n(thickness, ribs, fillet)"] -->|CadQuery| B["STEP\nGeometry"]
     B -->|FreeCAD API| C["Mesh +\nBCs + Loads"]
     C -->|CalculiX| D["FEA\nSolver"]
