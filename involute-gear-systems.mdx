@@ -1292,6 +1292,10 @@ def verify_gear_train(input_torque_Nm, input_rpm):
 verify_gear_train(0.5, 1000)
 ```
 
+:::tip[Instrument it]
+A gear train announces trouble through vibration: as teeth wear, pit, or chip, energy appears at the gear-mesh frequency (tooth count times shaft speed) and its harmonics. A MEMS accelerometer (ADXL345, or the wider-band ADXL1002) on the housing near the bearing picks this up, and a tachometer or encoder on the shaft lets you line the spectrum up with the mesh frequency. An ESP32 or STM32 reads them and can [flag the rising mesh tone](https://siliconwit.io) long before a tooth lets go, which matters even more for 3D-printed gears that wear faster than cut steel.
+:::
+
 ## Design Guidelines for 3D-Printed Gears
 
 <InArticleAd />

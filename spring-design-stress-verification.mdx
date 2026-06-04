@@ -1090,6 +1090,10 @@ where $E$ is Young's modulus (not shear modulus, since torsion springs are loade
 Torsion springs must be wound so that the applied torque **tightens** the coil (reduces the coil diameter). Loading in the opening direction creates tensile stress on the inner surface and can cause premature failure. Always specify the winding direction (left-hand or right-hand) based on the loading direction.
 :::
 
+:::tip[Instrument it]
+A spring's calculated rate and its real rate often differ, because wire diameter, free length, and end conditions all drift in manufacturing, and a 3D-printed or wound spring relaxes over time. Press it against a load cell while reading travel with a dial gauge or a linear potentiometer, and you get the true force-deflection curve, and so the actual rate. An ESP32 or STM32 logs it, and on a spring that holds a preload you can [watch for relaxation](https://siliconwit.io) as the force quietly sags over thousands of cycles.
+:::
+
 ## Summary and Key Takeaways
 
 <InArticleAd />

@@ -1048,6 +1048,10 @@ cq.exporters.export(heatsink, "heatsink_optimized.stl")
 print("Exported: heatsink_optimized.step, heatsink_optimized.stl")
 ```
 
+:::tip[Instrument it]
+The model predicts a junction temperature; the only way to trust it is to measure the real one. Put an NTC thermistor or a digital sensor (a precise TMP117, or a DS18B20) on the component case and another on the heat-sink base to read the actual thermal resistance, or a thermocouple with a MAX31855 for anything hot. An [ESP32 or STM32](/education/sensor-actuator-interfacing-stm32/) reads them, and can do more than verify: drive a PWM fan or [throttle the load](https://siliconwit.io) when the temperature climbs, so the part never cooks.
+:::
+
 ## Thermal Verification Summary
 
 <InArticleAd />
