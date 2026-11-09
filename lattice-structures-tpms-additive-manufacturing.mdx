@@ -25,7 +25,7 @@ import { Card, CardGrid, Badge, Steps, LinkButton, FileTree } from '@astrojs/sta
 
 import CodeBasedMechanicalDesignComments from '../../../../components/code-based-mechanical-design/CodeBasedMechanicalDesignComments.astro';
 
-Create lightweight lattice structures and triply periodic minimal surfaces (TPMS) that are impossible to model by hand in traditional CAD. Using CadQuery and NumPy, you will generate strut-based unit cells, implicit gyroid and Schwarz-P surfaces, graded-density fills, and conformal lattices ready for SLA, SLS, or FDM printing. #LatticeDesign #TPMS #AdditiveManufacturing
+A solid printed part is heavy, slow to print and uses material in places that carry almost no load. A lattice, a regular network of thin members and open space, removes that material. But it has thousands of small features, too many to draw by hand, and it is easy to design one that is too weak or cannot be printed. In this lesson you generate strut lattices in CadQuery and smooth repeating surfaces called TPMS (triply periodic minimal surfaces) in NumPy, and you learn what a lattice costs in stiffness. #LatticeDesign #TPMS #AdditiveManufacturing
 
 ## Learning Objectives
 
@@ -42,62 +42,44 @@ By the end of this lesson, you will be able to:
 <InArticleAd />
 
 
-<CardGrid>
-  <Card title="Weight Reduction" icon="rocket">
-    Lattice-filled parts can achieve 50-90% weight reduction compared to solid equivalents while retaining a significant fraction of structural stiffness and strength.
-  </Card>
+A lattice does inside a part what a truss does in a bridge: it keeps the material that carries load and leaves the rest open. A lattice-filled part can weigh 50 to 90 percent less than the solid one.
 
-  <Card title="Energy Absorption" icon="approve-check">
-    Controlled cell collapse provides predictable energy absorption profiles, critical for crash structures, protective equipment, and packaging.
-  </Card>
-
-  <Card title="Biomedical Integration" icon="heart">
-    Porous lattices match the stiffness of bone (reducing stress shielding) and promote osseointegration in orthopedic implants.
-  </Card>
-
-  <Card title="Thermal Management" icon="setting">
-    High surface-area-to-volume ratios in TPMS structures create excellent heat exchanger geometries with low pressure drop.
-  </Card>
-</CardGrid>
+The price is stiffness and strength, and it is higher than most people expect. In most lattices the thin members bend under load, and stiffness then falls with about the square of the density: a lattice with 20 percent of the material keeps about 4 percent of the stiffness, not 20 percent. Lattices whose members are pulled and pushed along their length lose stiffness only in proportion to the material removed. These are rough rules for low densities, so test a printed sample.
 
 ## Strut-Based Lattice Fundamentals
 
 <InArticleAd />
 
 
-Strut-based lattices are constructed from wireframe unit cells: nodes connected by cylindrical or tapered struts. The unit cell is then arrayed in three dimensions to fill a volume.
+A strut lattice is built from a **unit cell**: one small cube that holds a few straight rods (struts) joined at points (nodes). The cell is repeated in three directions, as a tile is repeated on a floor.
 
 ### Unit Cell Geometry
 
-The three most common strut-based unit cells differ in their connectivity, which directly determines mechanical properties:
+Three common unit cells differ in where the struts run:
 
-| Unit Cell | Nodes | Struts | Connectivity | Relative Density Range |
+| Unit Cell | Nodes | Struts | Where the struts run | Struts mostly |
 |-----------|-------|--------|-------------|----------------------|
-| Simple Cubic (SC) | 8 | 12 | Edge-connected | 5-30% |
-| Body-Centered Cubic (BCC) | 9 | 8 | Diagonal body struts | 5-40% |
-| Octet-Truss | 14 | 36 | Face + body diagonals | 10-50% |
+| Simple Cubic (SC) | 8 | 12 | Along the cube edges | Bend, except along the axes |
+| Body-Centered Cubic (BCC) | 9 | 8 | From each corner to the center | Bend |
+| Octet-Truss | 14 | 36 | Corners to face centers, and between face centers | Stretch |
 
-The **relative density** $\bar{\rho}$ is the ratio of lattice density to the density of the solid material:
-
-$$
-\bar{\rho} = \frac{\rho_{\text{lattice}}}{\rho_{\text{solid}}} = \frac{V_{\text{struts}}}{V_{\text{cell}}}
-$$
-
-For cylindrical struts of diameter $d$ in a cubic cell of side length $L$, the relative density of a BCC lattice is approximately:
+The **relative density** $\bar{\rho}$ is the volume of the struts divided by the volume of the cell, a number from 0 to 1. A BCC cell of side $L$ (mm) has 8 struts of diameter $d$ (mm), each as long as half the cube diagonal, $\sqrt{3}L/2$. Eight cylinder volumes divided by the cell volume $L^3$ give:
 
 $$
-\bar{\rho}_{\text{BCC}} \approx 8 \cdot \frac{\pi d^2}{4} \cdot \frac{\sqrt{3} L / 2}{L^3} = \frac{2\sqrt{3}\pi d^2}{L^2}
+\bar{\rho}_{\text{BCC}} \approx 8 \cdot \frac{\pi d^2}{4} \cdot \frac{\sqrt{3} L / 2}{L^3} = \frac{\sqrt{3}\pi d^2}{L^2}
 $$
+
+For $d = 0.8$ mm and $L = 10$ mm this is $5.44 \times 0.64 / 100 = 0.035$, or 3.5 percent. The formula counts the material where struts cross more than once, so it reads too high for thick struts.
 
 ## CadQuery Strut-Based Lattice Implementation
 
 <InArticleAd />
 
 
+Each function below lists the nodes, makes a cylinder for every strut, joins them into one solid, and adds a small sphere at each node. The octet-truss tab uses `make_strut` from the BCC tab.
+
 <Tabs>
   <TabItem label="Simple Cubic">
-
-The simple cubic unit cell connects the eight corner nodes with struts along the twelve edges.
 
 ```python
 import cadquery as cq
@@ -144,14 +126,17 @@ def cubic_unit_cell(cell_size: float, strut_diameter: float) -> cq.Workplane:
         mid_z = (z1 + z2) / 2
         length = np.sqrt((x2-x1)**2 + (y2-y1)**2 + (z2-z1)**2)
 
-        # Determine strut direction for orientation
+        # Strut direction: the cylinder is built from the first point
+        # along this direction, so it follows the cube edge
         dx, dy, dz = x2 - x1, y2 - y1, z2 - z1
 
-        strut = (
-            cq.Workplane("XY")
-            .transformed(offset=(mid_x, mid_y, mid_z))
-            .cylinder(length, r, centered=(True, True, True))
-        )
+        strut = cq.Workplane("XY").newObject([
+            cq.Solid.makeCylinder(
+                r, length,
+                pnt=cq.Vector(x1, y1, z1),
+                dir=cq.Vector(dx, dy, dz),
+            )
+        ])
         struts.append(strut)
 
     # Union all struts together
@@ -177,8 +162,6 @@ cell = cubic_unit_cell(cell_size=10.0, strut_diameter=1.0)
   </TabItem>
   <TabItem label="BCC (Body-Centered Cubic)">
 
-The BCC unit cell connects each corner node to the center node, producing eight diagonal struts.
-
 ```python
 import cadquery as cq
 import numpy as np
@@ -189,47 +172,17 @@ def make_strut(p1: Tuple[float, float, float],
                diameter: float) -> cq.Workplane:
     """Create a cylindrical strut between two 3D points.
 
-    Uses the wire-and-sweep approach for arbitrary orientations.
+    The cylinder starts at p1 and points toward p2, so it works
+    for any orientation.
     """
-    wire = cq.Workplane("XY").moveTo(p1[0], p1[1]).lineTo(p2[0], p2[1])
-    # For true 3D struts, use the polyline + sweep approach
-    path = (
-        cq.Workplane("XY")
-        .pushPoints([p1])
-        .workplane()
-        .moveTo(0, 0)
-        .threePointArc((0, 0, 0), (0, 0, 0))  # placeholder
-    )
+    start = cq.Vector(*p1)
+    direction = cq.Vector(*p2) - start
+    length = direction.Length
 
-    # Simpler approach: calculate midpoint, length, and orientation
-    mid = tuple((a + b) / 2 for a, b in zip(p1, p2))
-    length = np.sqrt(sum((b - a)**2 for a, b in zip(p1, p2)))
-    direction = tuple((b - a) / length for a, b in zip(p1, p2))
-
-    # Create cylinder along Z, then rotate to align with direction
     r = diameter / 2.0
-    strut = cq.Workplane("XY").cylinder(length, r)
-
-    # Compute rotation to align Z-axis with strut direction
-    z_axis = np.array([0, 0, 1])
-    d = np.array(direction)
-
-    if np.allclose(d, z_axis):
-        rotation_axis = (0, 0, 1)
-        angle = 0
-    elif np.allclose(d, -z_axis):
-        rotation_axis = (1, 0, 0)
-        angle = 180
-    else:
-        rot_ax = np.cross(z_axis, d)
-        rot_ax = rot_ax / np.linalg.norm(rot_ax)
-        angle = np.degrees(np.arccos(np.clip(np.dot(z_axis, d), -1, 1)))
-        rotation_axis = tuple(rot_ax)
-
-    strut = strut.val().Rotate(
-        (0, 0, 0), rotation_axis, angle
-    )
-    strut = cq.Workplane("XY").add(strut).translate(mid)
+    strut = cq.Workplane("XY").newObject([
+        cq.Solid.makeCylinder(r, length, pnt=start, dir=direction)
+    ])
 
     return strut
 
@@ -275,7 +228,7 @@ bcc_cell = bcc_unit_cell(cell_size=10.0, strut_diameter=0.8)
   </TabItem>
   <TabItem label="Octet-Truss">
 
-The octet-truss is the highest-performance strut lattice. It combines face-centered and body-centered connectivity to create a stretch-dominated structure (much stiffer than bending-dominated alternatives at the same relative density).
+In the octet-truss the struts form triangles, and a triangle cannot change shape unless a strut changes length. So the struts stretch, and the lattice is much stiffer than a BCC lattice of the same density.
 
 ```python
 import cadquery as cq
@@ -326,13 +279,14 @@ def octet_truss_unit_cell(cell_size: float,
     # Right face center (index 13) to right corners
     connections += [(13, 1), (13, 2), (13, 5), (13, 6)]
 
-    # Cross-connections between face centers (internal bracing)
+    # Cross-connections between neighbouring face centers (the inner
+    # octahedron: 12 struts). Opposite faces (8-9, 10-11, 12-13) are
+    # not nearest neighbours and are not connected.
     connections += [
-        (8, 9), (8, 10), (8, 11), (8, 12), (8, 13),
+        (8, 10), (8, 11), (8, 12), (8, 13),
         (9, 10), (9, 11), (9, 12), (9, 13),
-        (10, 11), (10, 12), (10, 13),
+        (10, 12), (10, 13),
         (11, 12), (11, 13),
-        (12, 13),
     ]
 
     struts = []
@@ -365,7 +319,7 @@ octet = octet_truss_unit_cell(cell_size=12.0, strut_diameter=0.6)
 
 ### Arraying Unit Cells into a Lattice Volume
 
-Once a unit cell is defined, you array it by translating copies across a 3D grid:
+The next function places copies of one cell on a 3D grid, as separate bodies in an assembly. The example makes 64 cells in a block 32 mm wide.
 
 ```python
 def array_lattice(unit_cell_func, cell_size: float,
@@ -413,7 +367,7 @@ lattice_block = array_lattice(
 ```
 
 :::tip[Performance Tip]
-For large arrays (10x10x10 or more), avoid boolean union of all cells because it is extremely slow. Instead, export each cell as a separate body in a STEP assembly, or use the mesh-based approach (export each cell as STL and merge meshes with numpy-stl).
+Fusing a large array with boolean unions is very slow.
 :::
 
 ## Triply Periodic Minimal Surfaces (TPMS)
@@ -421,66 +375,63 @@ For large arrays (10x10x10 or more), avoid boolean union of all cells because it
 <InArticleAd />
 
 
-TPMS are mathematically-defined surfaces that are periodic in all three spatial directions and have zero mean curvature at every point. They produce smooth, self-supporting geometries that are often superior to strut-based lattices for load-bearing and fluid-flow applications.
+Struts meet at sharp joints, and stress collects there. A TPMS lattice has no joints. It is one smooth wall that repeats in all three directions (triply periodic), and at every point it bends like a saddle, up one way and down the other (minimal surface).
 
 ### TPMS Implicit Surface Equations
 
-A TPMS is defined by an implicit equation $f(x, y, z) = t$, where $t$ is the **threshold** (or level-set value) that controls the wall thickness and relative density. The three most common TPMS types are:
+A TPMS is described by one function $f(x, y, z)$ that gives a number for every point in space, with $x$, $y$, $z$ in mm. The surface is where $f = t$. The number $t$ is the **threshold**, with no unit. This lesson calls a point solid when $f > t$. In all three functions $L$ is the cell size in mm, the distance after which the pattern repeats.
 
 <Tabs>
   <TabItem label="Gyroid">
 
-The gyroid is the most widely used TPMS in engineering. It has no straight lines, no planar symmetries, and is completely self-supporting (no overhangs greater than ~45 degrees).
+The gyroid is the most widely used TPMS in engineering.
 
 $$
 f_{\text{gyroid}}(x, y, z) = \sin\!\left(\frac{2\pi x}{L}\right)\cos\!\left(\frac{2\pi y}{L}\right) + \sin\!\left(\frac{2\pi y}{L}\right)\cos\!\left(\frac{2\pi z}{L}\right) + \sin\!\left(\frac{2\pi z}{L}\right)\cos\!\left(\frac{2\pi x}{L}\right) = t
 $$
 
-where $L$ is the unit cell period and $t$ controls the volume fraction. At $t = 0$, the surface divides space into two equal, interpenetrating volumes.
+At $t = 0$ the surface divides space into two equal volumes that wind through each other.
 
-**Key property:** The gyroid is self-supporting for most AM processes because maximum overhang angles stay below 42 degrees.
+**Key property:** A gyroid usually prints without supports, because its unsupported spans are short. It is not free of overhangs: small areas are nearly horizontal, and they grow with the cell size.
 
   </TabItem>
   <TabItem label="Schwarz-P (Primitive)">
 
-The Schwarz-P (or "Primitive") surface has cubic symmetry and creates a network of interconnected spherical-like voids.
+The Schwarz-P (or "Primitive") surface has the simplest equation. It looks like a grid of rounded chambers joined by necks along the three axes.
 
 $$
 f_{\text{Schwarz-P}}(x, y, z) = \cos\!\left(\frac{2\pi x}{L}\right) + \cos\!\left(\frac{2\pi y}{L}\right) + \cos\!\left(\frac{2\pi z}{L}\right) = t
 $$
 
-**Key property:** Schwarz-P has the highest stiffness-to-weight ratio among common TPMS types for uniaxial loading along the cell axes. However, it has 90-degree overhangs at certain orientations, requiring careful print orientation.
+**Key property:** Schwarz-P is stiff along a cell axis and weaker in other directions. The underside of its horizontal arms is an overhang, so it needs a small cell size or a tilted print.
 
   </TabItem>
   <TabItem label="Diamond">
 
-The Schwarz-D (Diamond) surface has the connectivity of a diamond crystal lattice. It creates two interpenetrating, non-connected channel networks.
+The Schwarz-D (Diamond) surface follows the pattern of the atoms in a diamond crystal. It separates two channel networks that wind through each other and never join.
 
 $$
 f_{\text{diamond}}(x, y, z) = \cos\!\left(\frac{2\pi x}{L}\right)\cos\!\left(\frac{2\pi y}{L}\right)\cos\!\left(\frac{2\pi z}{L}\right) - \sin\!\left(\frac{2\pi x}{L}\right)\sin\!\left(\frac{2\pi y}{L}\right)\sin\!\left(\frac{2\pi z}{L}\right) = t
 $$
 
-**Key property:** Diamond TPMS provides the best isotropic stiffness among TPMS types. Its mechanical properties are nearly the same in all loading directions.
+**Key property:** The stiffness of a diamond lattice is nearly the same in every loading direction.
 
   </TabItem>
 </Tabs>
 
 ### Relationship Between Threshold and Relative Density
 
-The threshold parameter $t$ directly controls the relative density $\bar{\rho}$:
+A point is solid when $f > t$. When $t$ rises, fewer points pass that test, so the relative density $\bar{\rho}$ falls. The cell size $L$ does not change the density:
 
 | TPMS Type | $t = 0$ (Relative Density) | $t = 0.5$ | $t = 1.0$ |
 |-----------|---------------------------|-----------|-----------|
-| Gyroid | ~50% | ~35% | ~20% |
-| Schwarz-P | ~50% | ~30% | ~15% |
-| Diamond | ~50% | ~33% | ~18% |
+| Gyroid | ~50% | ~34% | ~17% |
+| Schwarz-P | ~50% | ~36% | ~21% |
+| Diamond | ~50% | ~21% | 0% (the function never exceeds 1) |
 
 :::note[Sheet vs. Solid TPMS]
-There are two ways to create solid TPMS geometry:
-- **Sheet TPMS**: Thicken the surface into a thin shell. Use $t_1 < f(x,y,z) < t_2$ to define the shell region.
-- **Solid TPMS**: Fill one side of the surface. Use $f(x,y,z) > t$ to keep all voxels above the threshold.
-
-Sheet TPMS generally provides better specific stiffness, while solid TPMS is easier to generate and more robust for printing.
+- **Solid TPMS**: fill one side of the surface, $f(x,y,z) > t$. Easier to generate and to print.
+- **Sheet TPMS**: thicken the surface into a thin wall, $t_1 < f(x,y,z) < t_2$. Usually stiffer for the same weight.
 :::
 
 ## TPMS Implementation with CadQuery and NumPy
@@ -488,9 +439,11 @@ Sheet TPMS generally provides better specific stiffness, while solid TPMS is eas
 <InArticleAd />
 
 
-Generating TPMS geometry involves evaluating the implicit function on a 3D voxel grid, then extracting an isosurface using the marching cubes algorithm. The resulting triangle mesh is converted into a CadQuery solid.
+The equation says which points are solid, but a printer needs a surface made of triangles. First, compute $f$ at every point of a regular 3D grid (each point stands for one small cube of space, a voxel). Second, put triangles where the value changes sign between neighboring points, with a standard algorithm called marching cubes.
 
 ### Step 1: Evaluate the Implicit Function
+
+The function returns $f - t$ at every grid point: positive in the solid, negative in the open space. The example uses 100 points over 40 mm, which is 25 points for each 10 mm cell. With far fewer, the mesh becomes rough and thin walls break up.
 
 ```python
 import numpy as np
@@ -536,7 +489,7 @@ def evaluate_tpms(tpms_type: str,
     else:
         raise ValueError(f"Unknown TPMS type: {tpms_type}")
 
-    # Return binary volume: 1 where F > threshold, 0 elsewhere
+    # Return the signed field F - threshold: positive where solid, negative where empty
     return (F - threshold)
 
 # Example: Gyroid in a 40mm cube, 10mm period
@@ -551,8 +504,10 @@ field = evaluate_tpms(
 
 ### Step 2: Extract Isosurface with Marching Cubes
 
+A printable mesh must be closed, or watertight. So the function first surrounds the grid with one layer of empty points, which closes the surface where the solid touches the edge of the block. After the run, `mesh.is_watertight` must be `True`.
+
 ```python
-from skimage.measure import marching_cubes
+from skimage.measure import marching_cubes  # pip install scikit-image
 import trimesh
 
 def field_to_mesh(field: np.ndarray,
@@ -575,18 +530,31 @@ def field_to_mesh(field: np.ndarray,
         (zmax - zmin) / (field.shape[2] - 1),
     )
 
+    # Values exactly on the level give triangles of zero area (holes
+    # in the mesh), so move them a very small distance off it
+    eps = 1e-4
+    field = np.where(np.abs(field - level) < eps, level + eps, field)
+
+    # Pad the field with one layer of "empty" values. Without this the
+    # surface stays open where the solid touches the bounds, and the
+    # mesh is not watertight (not printable, and its volume is wrong).
+    padded = np.pad(field, 1, mode='constant', constant_values=level - 10.0)
+
     verts, faces, normals, _ = marching_cubes(
-        field, level=level, spacing=spacing
+        padded, level=level, spacing=spacing
     )
 
     # Offset vertices to match physical bounds
-    verts[:, 0] += xmin
-    verts[:, 1] += ymin
-    verts[:, 2] += zmin
+    # (one voxel back because of the padding layer)
+    verts[:, 0] += xmin - spacing[0]
+    verts[:, 1] += ymin - spacing[1]
+    verts[:, 2] += zmin - spacing[2]
 
-    mesh = trimesh.Trimesh(
-        vertices=verts, faces=faces, vertex_normals=normals
-    )
+    mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+
+    # Make sure the triangles face outward (positive volume)
+    if mesh.volume < 0:
+        mesh.invert()
 
     return mesh
 
@@ -598,7 +566,7 @@ print(f"Mesh: {len(mesh.vertices)} vertices, {len(mesh.faces)} faces")
 
 ### Step 3: Convert Mesh to CadQuery Solid (Optional)
 
-For boolean operations with CadQuery shapes, you can import the STL back as a solid:
+A mesh is enough for printing. You need this step only to combine the lattice with CadQuery shapes by boolean operations (union, cut, intersect):
 
 ```python
 import cadquery as cq
@@ -607,17 +575,34 @@ def stl_to_cadquery(stl_path: str) -> cq.Workplane:
     """Import an STL file as a CadQuery solid.
 
     Note: This requires the STL to be a valid, watertight mesh.
+    Every triangle becomes one face of the solid, so this is slow
+    and memory-hungry for large meshes. Test it on a small block first.
     """
-    result = cq.importers.importStl(stl_path)
-    return cq.Workplane("XY").add(result)
+    from OCP.StlAPI import StlAPI_Reader
+    from OCP.TopoDS import TopoDS_Shape
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Sewing
+
+    shape = TopoDS_Shape()
+    if not StlAPI_Reader().Read(shape, stl_path):
+        raise IOError(f"Could not read {stl_path}")
+
+    # Join the separate triangles into one closed shell, then a solid
+    sewing = BRepBuilderAPI_Sewing(1e-6)
+    sewing.Add(shape)
+    sewing.Perform()
+    shell = cq.Shape.cast(sewing.SewedShape())
+    solid = cq.Solid.makeSolid(shell)
+    return cq.Workplane("XY").add(solid)
 
 # Import gyroid mesh as CadQuery solid
-gyroid_solid = stl_to_cadquery("gyroid_40mm.stl")
+# (the 40mm block above has several hundred thousand triangles; try a
+#  small block first, for example bounds=(0, 10, 0, 10, 0, 10), resolution=21)
+# gyroid_solid = stl_to_cadquery("gyroid_40mm.stl")
 ```
 
 ### Sheet TPMS Generation
 
-To create a thin-walled sheet TPMS (higher specific stiffness than solid TPMS):
+A sheet TPMS keeps the points where $f$ is close to zero, $|f| < \Delta t / 2$. The code chooses $\Delta t$ with a rough rule that assumes $f$ changes by 1 over a distance of $L / 2\pi$. On a gyroid $f$ changes about 1.5 times faster, so the wall comes out near two thirds of the request: about 0.26 mm for the 0.4 mm asked below. Measure the wall in the mesh before printing.
 
 ```python
 def sheet_tpms(tpms_type: str, bounds: tuple, resolution: int,
@@ -662,11 +647,11 @@ sheet.export("gyroid_sheet_30mm.stl")
 <InArticleAd />
 
 
-Uniform lattices have the same density everywhere, but real load paths are not uniform. **Graded lattices** vary the density spatially, placing more material where stresses are high and less where loads are low.
+A uniform lattice has the same density everywhere, but the load in a real part is not the same everywhere. A **graded lattice** puts more material where the stress is high and less where it is low.
 
 ### Approach 1: Graded Strut Thickness
 
-For strut-based lattices, vary the strut diameter as a function of position:
+In a strut lattice, change the strut diameter from layer to layer. With 0.4 mm at the bottom and 1.2 mm at the top in 8 mm cells, the BCC formula gives a relative density from 1.4 to 12 percent.
 
 ```python
 def graded_bcc_lattice(cell_size: float,
@@ -726,13 +711,7 @@ graded = graded_bcc_lattice(
 
 ### Approach 2: Graded TPMS Threshold
 
-For TPMS, spatially vary the threshold parameter $t(x, y, z)$:
-
-$$
-f(x, y, z) = t(x, y, z)
-$$
-
-where $t$ is no longer constant but a function of position:
+In a TPMS, let the threshold change with position: a point is solid when $f(x, y, z) > t(x, y, z)$. The example raises $t$ from 0.0 at the bottom to 0.8 at the top, so the gyroid goes from 50 percent solid to about 24 percent:
 
 ```python
 def graded_tpms(tpms_type: str, bounds: tuple, resolution: int,
@@ -789,7 +768,7 @@ graded_mesh.export("gyroid_graded.stl")
 ```
 
 :::caution[Gradient Continuity]
-Abrupt changes in density create stress concentrations at the transition. Always use smooth gradients, linear at minimum, and preferably a sigmoid or polynomial blending function for structural applications.
+A sudden step in density concentrates stress at the step. Change the density gradually, with a straight-line gradient as here or a smoother curve.
 :::
 
 ## Conformal Lattice Filling
@@ -797,7 +776,7 @@ Abrupt changes in density create stress concentrations at the transition. Always
 <InArticleAd />
 
 
-A **conformal lattice** fills an arbitrary 3D shape, not just a rectangular block. This is the most useful operation in practice: you have a part geometry (bracket, implant, etc.) and want to fill its interior with lattice while preserving the outer skin.
+A **conformal lattice** fills the inside of a part of any shape, such as a bracket, and keeps a solid outer skin, so the part still has smooth faces.
 
 <Steps>
 1. **Define the outer envelope**: your part geometry in CadQuery
@@ -830,9 +809,8 @@ def conformal_lattice_fill(
     # Create outer shell
     shell = envelope.shell(-shell_thickness)
 
-    # Import lattice mesh
-    lattice = cq.importers.importStl(lattice_stl_path)
-    lattice_wp = cq.Workplane("XY").add(lattice)
+    # Import lattice mesh (see stl_to_cadquery above)
+    lattice_wp = stl_to_cadquery(lattice_stl_path)
 
     # Boolean intersection: trim lattice to inner volume
     inner_volume = envelope.cut(shell)
@@ -859,7 +837,11 @@ cylinder = (
 
 ### Alternative: Direct Voxel Intersection
 
-For complex shapes, a more robust approach is to evaluate the TPMS field and then mask it with the part's signed distance field:
+Boolean operations on a large mesh are slow and often fail. A more robust way stays on the voxel grid. For every grid point, compute its **signed distance** to the surface of the part: the distance in mm, with one sign inside and the other outside. A point is solid if it lies in the skin, or deeper inside and on the solid side of the TPMS.
+
+:::caution[Check the sign first]
+The code below expects negative distances inside the part. The trimesh documentation states the opposite for `signed_distance`: positive inside. Print `sdf` for a point that you know is inside. If it is positive, put a minus sign in front of the `signed_distance(...)` call, or the lattice is built outside the part.
+:::
 
 ```python
 def conformal_tpms_direct(
@@ -917,74 +899,65 @@ def conformal_tpms_direct(
 <InArticleAd />
 
 
-Not all lattice geometries are printable on all machines. Each additive manufacturing process imposes specific constraints.
-
+A lattice that is correct on the screen can still fail in the printer. Each process has a smallest feature it can make and its own way of holding up material that hangs in the air.
 <Tabs>
   <TabItem label="FDM Constraints">
 
-**Fused Deposition Modeling** (material extrusion) has the most restrictive constraints for lattice structures.
+**Fused Deposition Modeling** (FDM) lays down a melted plastic thread through a nozzle. It is the most limiting process for lattices.
 
 <CardGrid>
   <Card title="Minimum Strut Diameter" icon="warning">
-    **1.0 - 2.0 mm** minimum for reliable printing. Below this, struts fail to form or are extremely fragile. Rule of thumb: minimum strut diameter = 2.5 x nozzle diameter.
+    1.0 to 2.0 mm. Thinner struts do not form or break at a touch. Rule: at least 2.5 times the nozzle diameter.
   </Card>
 
   <Card title="Overhang Angle" icon="warning">
-    Maximum **45 degrees** from vertical without support. Gyroid TPMS is printable without supports. Schwarz-P requires careful orientation. BCC struts (54.7 degrees from vertical) are borderline.
+    A wall may lean up to about 45 degrees from vertical with no support under it. BCC struts lean 54.7 degrees, so they print only when short.
   </Card>
 
   <Card title="Minimum Wall Thickness" icon="warning">
-    **0.8 - 1.2 mm** for sheet TPMS walls. Must be at least 2x nozzle diameter for reliable extrusion paths.
+    0.8 to 1.2 mm for sheet TPMS walls: at least two nozzle widths.
   </Card>
 
   <Card title="Cell Size" icon="warning">
-    **Minimum 5 mm** cell period for 0.4mm nozzle. Smaller cells produce features the nozzle cannot resolve.
+    At least 5 mm with a 0.4 mm nozzle. In smaller cells the nozzle cannot follow the shape.
   </Card>
 </CardGrid>
 
   </TabItem>
   <TabItem label="SLA Constraints">
 
-**Stereolithography** (vat photopolymerization) can resolve much finer features than FDM.
+**Stereolithography** (SLA) hardens liquid resin with light, layer by layer. It makes much finer features than FDM.
 
 <CardGrid>
   <Card title="Minimum Strut Diameter" icon="approve-check">
-    **0.3 - 0.5 mm** depending on resin and layer height. Desktop SLA (e.g., Formlabs) can reliably print 0.4mm struts.
+    0.3 to 0.5 mm, depending on the resin and the layer height.
   </Card>
 
   <Card title="Drainage Holes" icon="warning">
-    Enclosed cavities must have **drainage holes** (minimum 1.5 mm diameter) to remove uncured resin. TPMS structures are inherently open, which is one of their advantages.
+    Liquid resin must be able to run out. A closed cavity needs a drain hole of at least 1.5 mm. TPMS lattices are open everywhere, which helps.
   </Card>
 
   <Card title="Support Removal" icon="warning">
-    Internal supports are **impossible to remove** from dense lattices. The lattice must be self-supporting, or the print orientation must be chosen so that no internal supports are generated.
-  </Card>
-
-  <Card title="Cell Size" icon="approve-check">
-    **Minimum 2 mm** cell period is achievable. Some high-resolution SLA printers can go to 1 mm.
+    Supports inside a dense lattice cannot be cut out. Choose a lattice and a print direction that need no supports inside.
   </Card>
 </CardGrid>
 
   </TabItem>
   <TabItem label="SLS/MJF Constraints">
 
-**Selective Laser Sintering** and **Multi Jet Fusion** (powder bed fusion) are ideal for lattice structures because no support structures are needed.
+**Selective Laser Sintering** (SLS) and **Multi Jet Fusion** (MJF) fuse a bed of powder, layer by layer. The loose powder holds the part up, so no supports are needed. These are the best processes for lattices.
 
 <CardGrid>
   <Card title="Minimum Strut Diameter" icon="approve-check">
-    **0.5 - 0.8 mm** for Nylon PA12. Metal SLS (DMLS) can achieve **0.3 - 0.5 mm** struts.
+    0.5 to 0.8 mm in nylon PA12. Metal powder machines reach 0.3 to 0.5 mm.
   </Card>
 
   <Card title="Powder Removal" icon="warning">
-    Trapped powder inside closed cells cannot be removed. All lattice cells must be **open** and connected to the exterior. Minimum opening size: **1.0 mm** for PA12, **0.5 mm** for metals.
-  </Card>
-
-  <Card title="Self-Supporting" icon="approve-check">
-    SLS/MJF: the powder bed acts as support, so **all geometries are self-supporting**. This makes them the ideal process for complex lattice structures.
+    Powder trapped in a closed cell stays there. Every cell must open to the outside, through openings of at least 1.0 mm for PA12 and 0.5 mm for metals.
   </Card>
 
   <Card title="Cell Size" icon="approve-check">
-    **Minimum 2-3 mm** for PA12 powder. Metal DMLS can resolve **1.5 mm** cells. Always verify with a test coupon.
+    2 to 3 mm in PA12 and about 1.5 mm in metal. Confirm with a test piece.
   </Card>
 </CardGrid>
 
@@ -994,16 +967,20 @@ Not all lattice geometries are printable on all machines. Each additive manufact
 ### Printability Validation Checklist
 
 <Steps>
-1. **Check minimum feature size**: verify that all strut diameters and wall thicknesses exceed the process minimum
+1. **Smallest feature**: every strut and wall is thicker than the process minimum
 
-2. **Analyze overhang angles**: for FDM/SLA, compute the maximum overhang angle from the mesh normals and verify it is within limits
+2. **Overhangs**: for FDM and SLA, the steepest overhang is within the limit
 
-3. **Verify powder/resin drainage**: ensure all internal channels connect to the exterior with openings larger than the minimum drainage size
+3. **Drainage**: every channel opens to the outside, so powder or resin can leave
 
-4. **Check aspect ratio**: long, thin struts (length/diameter > 10) are prone to warping and breakage during post-processing
+4. **Slender struts**: a strut more than 10 times longer than its diameter warps and breaks easily
 
-5. **Test coupon first**: print a small sample (2x2x2 cells) before committing to a full part to verify dimensional accuracy and structural integrity
+5. **Test coupon**: print a sample of 2x2x2 cells before the full part
 </Steps>
+
+The function below checks that the mesh is watertight and finds the steepest downward-facing triangle. It does not measure strut or wall thickness: it only returns the limits for the process.
+
+Every TPMS has some triangles that are nearly horizontal. For a gyroid the function reports almost 90 degrees and `overhang_ok: False` on FDM, although only about a quarter of the downward-facing area is steeper than 45 degrees. Treat a failed result as a reason to print a test coupon.
 
 ```python
 def validate_lattice_printability(
@@ -1041,13 +1018,19 @@ def validate_lattice_printability(
 
     c = constraints[process]
 
-    # Check overhang angles from face normals
+    # Check overhang angles from face normals.
+    # Only faces that look downward (normal z < 0) are overhangs.
+    # Angle from vertical: 0 for a vertical wall, 90 for a flat ceiling.
     normals = mesh.face_normals
     z_component = normals[:, 2]  # vertical component
-    overhang_angles = np.degrees(np.arccos(np.clip(
-        np.abs(z_component), 0, 1
-    )))
-    max_overhang = np.max(overhang_angles)
+    downward = z_component < 0
+    if downward.any():
+        overhang_angles = np.degrees(np.arcsin(np.clip(
+            -z_component[downward], 0, 1
+        )))
+        max_overhang = np.max(overhang_angles)
+    else:
+        max_overhang = 0.0
 
     # Check if mesh is watertight (required for all processes)
     is_watertight = mesh.is_watertight
@@ -1073,30 +1056,18 @@ def validate_lattice_printability(
 <InArticleAd />
 
 
-<CardGrid>
-  <Card title="Aerospace" icon="rocket">
-    Lattice-filled brackets, panels, and structural nodes reduce mass by 40-70% while meeting stiffness requirements. Companies like Airbus use TPMS partition walls in cabin components.
-  </Card>
-
-  <Card title="Biomedical Implants" icon="heart">
-    Porous titanium implants with gyroid lattice match the elastic modulus of cortical bone (10-30 GPa), reducing stress shielding and promoting osseointegration. Cell sizes of 300-800 micrometers optimize bone ingrowth.
-  </Card>
-
-  <Card title="Heat Exchangers" icon="setting">
-    TPMS geometries create two non-intersecting fluid channels with massive surface area. Gyroid heat exchangers achieve 2-5x higher heat transfer coefficients compared to conventional fin designs at the same pressure drop.
-  </Card>
-
-  <Card title="Energy Absorption" icon="approve-check">
-    Graded-density lattices can be tuned for specific energy absorption profiles. The crush force plateau can be designed to stay below injury thresholds for protective equipment (helmets, body armor, packaging).
-  </Card>
-</CardGrid>
+- **Light structures**: lattice-filled aircraft brackets and panels, such as the Airbus "bionic partition" cabin wall.
+- **Bone implants**: a porous titanium lattice can be made about as stiff as bone, and bone grows into its pores.
+- **Energy absorption**: a lattice crushes cell by cell at a nearly steady force, which suits helmets and packaging.
 
 ## Complete Example: Graded Gyroid-Filled Cylinder
 
 <InArticleAd />
 
 
-This end-to-end example generates a cylindrical part with a solid outer shell and a density-graded gyroid interior, a common geometry for lightweight structural members or biomedical implants.
+This example builds a cylinder 30 mm in diameter and 50 mm tall, with a solid skin of 1.5 mm, solid end caps, and a gyroid inside that goes from 50 percent solid at the bottom to about 30 percent at the top.
+
+In the output, the relative density should be near 54 percent. The skin and the caps alone are 24 percent of the solid cylinder, so in a small part the skin limits what a lattice can save.
 
 ```python
 import numpy as np
@@ -1159,13 +1130,20 @@ spacing = (
     (ymax - ymin) / (resolution - 1),
     (zmax - zmin) / (resolution - 1),
 )
+# Pad with one empty layer so the surface is closed at the bounds
+# (the end caps touch zmin and zmax)
+combined = np.pad(combined, 1, mode='constant', constant_values=0.0)
 verts, faces, normals, _ = marching_cubes(combined, level=0.5,
                                            spacing=spacing)
-verts[:, 0] += xmin
-verts[:, 1] += ymin
-verts[:, 2] += zmin
+verts[:, 0] += xmin - spacing[0]
+verts[:, 1] += ymin - spacing[1]
+verts[:, 2] += zmin - spacing[2]
 
 mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+
+# Make sure the triangles face outward (positive volume)
+if mesh.volume < 0:
+    mesh.invert()
 
 # === Report ===
 solid_volume = np.pi * outer_radius**2 * height
@@ -1188,24 +1166,20 @@ print("Exported: graded_gyroid_cylinder.stl")
 
 
 <CardGrid>
+  <Card title="The Trade" icon="warning">
+    A lattice saves weight and costs stiffness. When the members bend, stiffness falls with about the square of the relative density.
+  </Card>
+
   <Card title="Strut Lattices" icon="setting">
-    Simple to implement and understand. BCC for general use, octet-truss for maximum stiffness. Limited to relatively coarse features on FDM.
+    BCC struts bend. Octet-truss struts stretch, so it is much stiffer at the same weight.
   </Card>
 
   <Card title="TPMS Surfaces" icon="approve-check">
-    Mathematically elegant, smooth, and often self-supporting. Gyroid is the default choice for most applications due to its isotropy and printability.
-  </Card>
-
-  <Card title="Graded Density" icon="rocket">
-    Always prefer graded over uniform because it places material where it is needed. Linear gradients are the starting point; use FEA-driven gradients for optimal results.
-  </Card>
-
-  <Card title="Process Awareness" icon="warning">
-    Every design choice must account for the target AM process. Validate with the printability checklist and always print a test coupon before committing to full production.
+    One smooth wall from one equation. The threshold sets the density and the cell size sets the scale.
   </Card>
 </CardGrid>
 
-**Next lesson:** We will design compression, extension, and torsion springs from load requirements, generate helical geometry with CadQuery wire sweeps, and verify designs with Wahl correction factor and Goodman fatigue analysis.
+**Next lesson:** [Spring Design with Engineering Stress Verification](/education/code-based-mechanical-design/spring-design-stress-verification/) sizes springs from a load and checks the stress and fatigue life of the wire.
 
 <CodeBasedMechanicalDesignComments />
 

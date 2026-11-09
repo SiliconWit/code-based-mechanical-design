@@ -25,7 +25,7 @@ import { Card, CardGrid, Badge, Steps, LinkButton, FileTree } from '@astrojs/sta
 
 import CodeBasedMechanicalDesignComments from '../../../../components/code-based-mechanical-design/CodeBasedMechanicalDesignComments.astro';
 
-Downloading gear models from online libraries is fast, but those models rarely match your exact module, tooth count, or pressure angle, and you have no way to verify that the tooth profile is correct. A gear with the wrong involute curve binds under load, wears unevenly, and fails prematurely. Generating gears from parametric equations guarantees mathematical precision and lets you change any parameter (module, tooth count, face width) without starting over. In this lesson you will derive the involute profile from first principles, implement a spur gear generator in CadQuery, verify bending stress with the Lewis equation, and assemble a complete gear train with housing. #InvoluteGears #GearTrain #PythonCAD
+A gear model copied from an online library seldom has the size and tooth count you need, and you cannot tell whether its tooth curve is right. A wrong curve matters: the gears run unevenly, make noise, wear fast and can jam under load. In this lesson you compute the tooth curve, called the involute, from its equation, so you know the shape is right and can change any size with one number. You build a generator for spur gears (gears with straight teeth, parallel to the shaft) in CadQuery, check the bending stress in a tooth with the Lewis equation, and assemble a two-stage gear train with its housing. #InvoluteGears #GearTrain #PythonCAD
 
 ## Learning Objectives
 
@@ -43,76 +43,68 @@ By the end of this lesson, you will be able to:
 <InArticleAd />
 
 
-Before writing any code, you need to understand the geometry that makes involute gears work. The involute curve has a remarkable property: when two involute gears mesh, the contact point always lies on a straight line (the line of action), producing a constant velocity ratio regardless of small center-distance errors. This is why involute gears dominate mechanical engineering.
+Two smooth discs pressed together turn each other at a steady speed ratio, but under load they slip. Teeth stop the slip. The tooth shape must then keep that steady ratio, or the driven gear speeds up and slows down as each tooth passes, and the machine shakes.
+
+The involute curve does this. The point where two involute teeth touch moves along one straight line, the line of action, so the ratio stays constant, even when the shafts are a little too far apart.
 
 ### Fundamental Gear Parameters
 
 <CardGrid>
   <Card title="Module (m)" icon="setting">
-    The fundamental size parameter. Module equals the pitch circle diameter divided by the number of teeth: $m = d / z$. Standard modules (ISO 54): 0.5, 0.8, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0 mm.
+    The size of the teeth: the pitch circle diameter $d$ divided by the number of teeth $z$, $m = d / z$, in mm. Standard modules (ISO 54) include 1, 1.25, 1.5, 2, 2.5 and 3 mm.
   </Card>
   <Card title="Pressure Angle (alpha)" icon="setting">
-    The angle between the tooth face and a radial line at the pitch circle. Standard value: $\alpha = 20°$ (ISO 53). This defines the shape of the involute curve and the direction of force transmission.
+    The angle between the tooth face and a radial line at the pitch circle. A tooth pushes its partner along a line tilted by this angle, so part of the force pushes the shafts apart. Standard value: $\alpha = 20°$ (ISO 53).
   </Card>
   <Card title="Number of Teeth (z)" icon="setting">
-    Determines the gear ratio when paired with another gear. Minimum practical value is about 17 teeth for 20-degree pressure angle (below this, undercutting occurs unless profile shift is applied).
+    With too few teeth the cutting tool removes part of the tooth root. This is undercut, and it weakens the tooth. The limit $z_{min} = 2/\sin^2\alpha$ is 17.1 for $\alpha = 20°$, and 17 teeth is accepted in practice.
   </Card>
   <Card title="Face Width (b)" icon="setting">
-    The gear thickness in the axial direction. Typical rule of thumb: $b = 8m$ to $12m$ for general-purpose gears. Wider face = higher load capacity but more sensitive to misalignment.
+    The thickness of the gear along the shaft, in mm, usually $8m$ to $12m$. A wider face carries more load only if the shafts are parallel enough for the whole width to touch.
   </Card>
 </CardGrid>
 
 ### Circle Definitions
 
-Every gear has four concentric circles that define its geometry:
+Four circles with the same center fix the shape of the teeth. The pitch circles of two gears are the two discs described above.
 
 | Circle | Symbol | Formula | Description |
 |--------|--------|---------|-------------|
-| Pitch circle | $d$ | $d = m \cdot z$ | Where gears "roll" against each other |
-| Base circle | $d_b$ | $d_b = d \cdot \cos(\alpha)$ | Where the involute curve originates |
-| Addendum circle | $d_a$ | $d_a = d + 2m$ | Outer tip of the teeth |
-| Dedendum circle | $d_f$ | $d_f = d - 2.5m$ | Root of the teeth (includes clearance) |
+| Pitch circle | $d$ | $d = m \cdot z$ | Where the two gears roll on each other |
+| Base circle | $d_b$ | $d_b = d \cdot \cos(\alpha)$ | Where the involute curve starts |
+| Addendum circle | $d_a$ | $d_a = d + 2m$ | Tips of the teeth |
+| Dedendum circle | $d_f$ | $d_f = d - 2.5m$ | Bottom of the gaps between teeth |
 
-The **addendum** (tooth height above pitch circle) is:
+A tooth rises one module above the pitch circle (the **addendum**, $h_a = m$) and the gap goes 1.25 modules below it (the **dedendum**, $h_f = 1.25m$). The extra $0.25m$ is clearance, so that a tip never touches the bottom of a gap.
 
-$$a = m$$
-
-The **dedendum** (tooth depth below pitch circle, including clearance) is:
-
-$$f = 1.25 \cdot m$$
-
-The total tooth height is therefore $h = a + f = 2.25m$.
+For the example gear, $m = 2$ mm, $z = 20$, $\alpha = 20°$: $d = 40$ mm, $d_b = 37.59$ mm, $d_a = 44$ mm and $d_f = 35$ mm.
 
 ### The Involute Curve
 
-The involute of a circle is the path traced by the end of a taut string unwinding from that circle. Mathematically, for a base circle of radius $r_b$:
+Wind a string on a circle, then unwind it and keep it tight. The end of the string draws the involute of that circle. In a gear the circle is the base circle, with radius $r_b$ in mm. When the string has unwound by the angle $t$, in radians, its end is at:
 
 $$x(t) = r_b \cdot (\cos(t) + t \cdot \sin(t))$$
 
 $$y(t) = r_b \cdot (\sin(t) - t \cdot \cos(t))$$
 
-where $t$ is the parameter (the "unwinding angle" in radians, starting from 0).
-
-The **involute function** (used for angular positioning of teeth) is:
+That point is $r_b\sqrt{1 + t^2}$ from the center. As the curve moves outward it also turns away from the radius on which it started. Where it crosses the pitch circle, it has turned by the **involute function** of the pressure angle, in radians:
 
 $$\text{inv}(\alpha) = \tan(\alpha) - \alpha$$
 
-This function appears when calculating the angular thickness of a tooth at any given radius.
+For $\alpha = 20°$ this is 0.0149 rad, a little less than one degree.
 
 ### Tooth Angular Thickness
 
-At the pitch circle, the angular thickness of one tooth (in radians) is:
+On the pitch circle, teeth and gaps are equally wide. The angle from one tooth to the next is $2\pi/z$ radians, so a tooth covers $\pi/z$. The code builds each tooth from its center line, so it uses half of that, from the center line to one flank (a working side of the tooth):
 
-$$\theta_{tooth} = \frac{\pi}{2z}$$
-
-This means each tooth occupies half of the angular pitch $\frac{2\pi}{z}$ at the pitch circle, and the gap occupies the other half (for zero backlash).
+$$\theta_{half} = \frac{\pi}{2z}$$
 
 ## Involute Profile Generation in Python
 
 <InArticleAd />
 
 
-The first step is to implement the involute curve as a Python function that returns a list of points suitable for CadQuery:
+These three functions turn the equations into points that CadQuery can join. The last one walks along the curve from the base circle to the tip circle and returns 21 points. As a check, its last point must lie at the tip radius, 22 mm for the example gear.
 
 ```python
 import cadquery as cq
@@ -176,7 +168,9 @@ def generate_involute_profile(r_base, r_tip, num_points=20):
 
 ### Building a Complete Tooth Profile
 
-A single gear tooth consists of two involute flanks (left and right), connected by the tip arc at the top and the root fillet at the bottom:
+A tooth has two involute flanks that mirror each other. The involute above starts on the X-axis, so the code turns it clockwise by $\pi/(2z) + \text{inv}(\alpha)$. The flank then crosses the pitch circle half a tooth thickness below the X-axis, and its mirror image half a thickness above.
+
+The involute exists only outside the base circle. In a 20° gear with fewer than 42 teeth the gap goes deeper than that, and the generator joins the two with a straight radial line. A real cutting tool leaves a rounded fillet there, so the drawn root is approximate.
 
 ```python
 def generate_tooth_profile(module, num_teeth, pressure_angle_deg=20.0,
@@ -198,11 +192,11 @@ def generate_tooth_profile(module, num_teeth, pressure_angle_deg=20.0,
     # Handle case where base circle is larger than root circle
     r_start = max(r_base, r_root)
 
-    # Generate the right flank involute (positive side)
+    # Generate one flank involute, from the base circle to the tip
     right_flank = generate_involute_profile(r_base, r_tip, num_points)
 
-    # Tooth angular half-thickness at the pitch circle
-    # theta_pitch = pi/(2*z) + 2*inv(alpha)/z   (for standard gears)
+    # Tooth angular half-thickness at the pitch circle = pi/(2*z)
+    # (the full tooth thickness angle is pi/z, half of the angular pitch 2*pi/z)
     inv_alpha = involute_function(alpha)
 
     # Angular half-thickness at the base circle
@@ -212,17 +206,20 @@ def generate_tooth_profile(module, num_teeth, pressure_angle_deg=20.0,
     # So the tooth center offset = pi/(2*z) + inv(alpha)
     tooth_half_angle = math.pi / (2 * num_teeth) + inv_alpha
 
-    # Rotate the right flank so the tooth is centered on the X-axis
+    # Rotate the flank so the tooth is centered on the X-axis.
+    # The involute curls toward larger angles as it moves outward, so
+    # it must start at -tooth_half_angle: the flank then comes closer
+    # to the center line toward the tip, and the tooth gets narrower.
     right_rotated = []
     for (x, y) in right_flank:
-        angle = tooth_half_angle
+        angle = -tooth_half_angle
         xr = x * math.cos(angle) - y * math.sin(angle)
         yr = x * math.sin(angle) + y * math.cos(angle)
         right_rotated.append((xr, yr))
 
-    # Mirror to get the left flank
+    # Mirror to get the other flank
     left_rotated = [(x, -y) for (x, y) in right_rotated]
-    left_rotated.reverse()  # reverse order for continuous path
+    left_rotated.reverse()  # reverse order (tip to base) for a continuous path
 
     return left_rotated, right_rotated, r_root, r_tip
 ```
@@ -231,6 +228,8 @@ def generate_tooth_profile(module, num_teeth, pressure_angle_deg=20.0,
 
 <InArticleAd />
 
+
+This function makes one flank, mirrors it, and copies the tooth $z$ times around the center, with points on the root circle between teeth. The closed outline is extruded to the face width and given a bore (the hole for the shaft). The third tab prints the dimensions with no geometry: for `gear_dimensions(2.0, 20)` look for a base diameter of 37.588 mm.
 
 <Tabs>
   <TabItem label="Complete Implementation">
@@ -279,26 +278,34 @@ def make_spur_gear(module, num_teeth, width, pressure_angle_deg=20.0,
     tooth_half_angle = math.pi / (2 * num_teeth) + inv_alpha
 
     # ─── Generate one tooth profile ───
-    # Right flank: involute from base circle to tip
+    # Right flank: involute from r_start (base or root circle,
+    # whichever is larger) to the tip
+    t_start = math.sqrt((r_start / r_base) ** 2 - 1)
     t_tip = math.sqrt((r_tip / r_base) ** 2 - 1)
     right_pts = []
     for i in range(num_points + 1):
-        t = t_tip * i / num_points
+        t = t_start + (t_tip - t_start) * i / num_points
         pt = involute_point(r_base, t)
-        # Rotate by tooth_half_angle to center tooth on X-axis
-        x = pt[0] * math.cos(tooth_half_angle) \
-          - pt[1] * math.sin(tooth_half_angle)
-        y = pt[0] * math.sin(tooth_half_angle) \
-          + pt[1] * math.cos(tooth_half_angle)
+        # Rotate by -tooth_half_angle to center tooth on X-axis.
+        # The involute curls toward larger angles as it moves outward,
+        # so this flank starts below the X-axis and comes closer to it
+        # toward the tip: the tooth gets narrower, as it must.
+        x = pt[0] * math.cos(-tooth_half_angle) \
+          - pt[1] * math.sin(-tooth_half_angle)
+        y = pt[0] * math.sin(-tooth_half_angle) \
+          + pt[1] * math.cos(-tooth_half_angle)
         right_pts.append((x, y))
 
-    # Left flank: mirror of right flank
+    # Left flank: mirror of right flank, in reverse order (tip to root)
     left_pts = [(x, -y) for (x, y) in right_pts]
     left_pts.reverse()
 
+    # Angle of the flank start point, measured from the tooth center line
+    flank_start_angle = tooth_half_angle - (t_start - math.atan(t_start))
+
     # ─── Build the complete gear outline ───
-    # Strategy: for each tooth, draw left_flank -> tip_arc -> right_flank
-    #           then root_arc to the next tooth
+    # Strategy: for each tooth, draw right_flank (root to tip) -> tip_arc
+    #           -> left_flank (tip to root), then root_arc to the next tooth
     angular_pitch = 2 * math.pi / num_teeth
 
     all_points = []
@@ -308,35 +315,43 @@ def make_spur_gear(module, num_teeth, width, pressure_angle_deg=20.0,
         cos_a = math.cos(angle)
         sin_a = math.sin(angle)
 
-        # Rotate left flank points
-        for (x, y) in left_pts:
-            xr = x * cos_a - y * sin_a
-            yr = x * sin_a + y * cos_a
-            all_points.append((xr, yr))
-
-        # Tip arc point (at the tip of the tooth)
-        # Use the last point of left flank and first of right flank
-        # to interpolate across the tip
-        tip_mid_x = r_tip * math.cos(angle)
-        tip_mid_y = r_tip * math.sin(angle)
-        all_points.append((tip_mid_x, tip_mid_y))
-
-        # Rotate right flank points
+        # Rotate right flank points (root to tip)
         for (x, y) in right_pts:
             xr = x * cos_a - y * sin_a
             yr = x * sin_a + y * cos_a
             all_points.append((xr, yr))
 
-        # Root arc: connect to next tooth's left flank
-        # Midpoint of root arc between this tooth and the next
-        next_angle = angle + angular_pitch / 2.0
-        root_x = r_root * math.cos(next_angle + angular_pitch * 0.05)
-        root_y = r_root * math.sin(next_angle + angular_pitch * 0.05)
-        all_points.append((root_x, root_y))
+        # Tip arc point (at the tip of the tooth)
+        # between the last point of the right flank and the first
+        # point of the left flank
+        tip_mid_x = r_tip * math.cos(angle)
+        tip_mid_y = r_tip * math.sin(angle)
+        all_points.append((tip_mid_x, tip_mid_y))
+
+        # Rotate left flank points (tip to root)
+        for (x, y) in left_pts:
+            xr = x * cos_a - y * sin_a
+            yr = x * sin_a + y * cos_a
+            all_points.append((xr, yr))
+
+        # Root arc: connect to next tooth's right flank.
+        # Points on the root circle: the midpoint of the gap, and (see
+        # below) the points under the end of this tooth and the start
+        # of the next one
+        root_a = angle + flank_start_angle
+        root_b = angle + angular_pitch - flank_start_angle
+        root_angles = [(root_a + root_b) / 2.0]
+        if r_start > r_root:
+            # Flanks start on the base circle: add the two points
+            # that join them to the root circle with radial lines
+            root_angles = [root_a] + root_angles + [root_b]
+        for root_angle in root_angles:
+            root_x = r_root * math.cos(root_angle)
+            root_y = r_root * math.sin(root_angle)
+            all_points.append((root_x, root_y))
 
     # ─── Create the 2D profile as a CadQuery wire ───
-    # Close the loop by repeating the first point, then use polyline
-    all_points.append(all_points[0])
+    # polyline().close() joins the last point back to the first one
     wp = cq.Workplane("XY")
     gear_profile = wp.polyline(all_points).close()
 
@@ -403,7 +418,7 @@ gear_with_hub = make_spur_gear(
 )
 show(gear_with_hub)
 
-# ─── Small pinion (17 teeth — minimum for no undercutting) ───
+# ─── Small pinion (17 teeth, practical minimum for no undercutting) ───
 pinion = make_spur_gear(
     module=1.5,
     num_teeth=17,
@@ -475,40 +490,29 @@ gear_dimensions(2.5, 40)
 <InArticleAd />
 
 
-Two involute gears mesh correctly when they share the same module and pressure angle. The center distance is determined by their pitch circle radii.
+Two involute gears mesh only when they have the same module and the same pressure angle. The tooth counts are free, and they set the ratio. The smaller gear of a pair is called the pinion.
 
 ### Center Distance Calculation
 
-For a pair of gears with teeth counts $z_1$ (pinion) and $z_2$ (gear), both with module $m$:
+The two pitch circles must touch, so the shafts are apart by the sum of the two pitch radii. For tooth counts $z_1$ (pinion) and $z_2$ (gear) and module $m$ in mm:
 
 $$a = \frac{m \cdot (z_1 + z_2)}{2}$$
 
-This is the **standard center distance**, the exact distance between shaft centers for zero backlash. In practice, you add a small amount of backlash to prevent binding:
-
-$$a_{actual} = a + \Delta a$$
-
-where $\Delta a$ is typically 0.05 to 0.1 mm for 3D-printed gears and 0.02 to 0.05 mm for machined gears.
+This is the **standard center distance** $a$, in mm: 60 mm for 20 and 40 teeth at module 2. At exactly this distance the teeth touch on both sides, and real teeth with small errors would jam. So the shafts are set further apart by a small distance $\Delta a$, in mm.
 
 ### Contact Ratio
 
-The **contact ratio** $\varepsilon$ is the average number of teeth in contact at any time. For smooth operation, $\varepsilon > 1.2$ is required:
+The next pair of teeth must touch before the last pair separates. The **contact ratio** $\varepsilon$ is the average number of tooth pairs in contact: at 1.6, two pairs share the load for 60 percent of the time. For smooth running, $\varepsilon > 1.2$ is required. It is the length of the line of action on which teeth touch, divided by the tooth spacing along that line:
 
 $$\varepsilon = \frac{\sqrt{r_{a1}^2 - r_{b1}^2} + \sqrt{r_{a2}^2 - r_{b2}^2} - a \cdot \sin(\alpha)}{\pi \cdot m \cdot \cos(\alpha)}$$
 
-where $r_{a1}, r_{a2}$ are the addendum radii and $r_{b1}, r_{b2}$ are the base circle radii of the two gears. A contact ratio above 1.0 means there is always at least one pair of teeth in contact, ensuring continuous power transmission.
+Here $r_{a1}$, $r_{a2}$ are the tip radii and $r_{b1}$, $r_{b2}$ the base circle radii, in mm. The calculator in the third tab below gives 1.635 for 20 and 40 teeth. It gives 1.593 for a pinion of 14 teeth, but the formula does not know that this pinion is undercut, so the real value is lower.
 
 ### Backlash
 
-**Backlash** is the gap between meshing teeth when one gear is held stationary. Some backlash is necessary to prevent jamming from thermal expansion, manufacturing tolerances, and lubrication space. For 3D-printed gears, typical backlash values are:
+**Backlash** is the play between meshing teeth: hold one gear still, and it is the distance the other can rock, measured along the pitch circle. Printed teeth are never exact and parts expand when warm, so some play is needed: 0.15 to 0.25 mm for FDM (filament) prints, 0.08 to 0.15 mm for resin prints, 0.10 to 0.20 mm for sintered nylon, and 0.02 to 0.05 mm for machined gears.
 
-| Printing Method | Recommended Backlash |
-|----------------|---------------------|
-| FDM (0.4mm nozzle) | 0.15 - 0.25 mm |
-| SLA (standard resin) | 0.08 - 0.15 mm |
-| SLS (nylon) | 0.10 - 0.20 mm |
-| CNC machined | 0.02 - 0.05 mm |
-
-Backlash can be introduced by either increasing the center distance or reducing the tooth thickness.
+The code below makes backlash with a larger center distance, and its argument named `backlash` is really $\Delta a$. Moving the shafts apart by $\Delta a$ opens a play of $2\,\Delta a \tan\alpha$, so `backlash=0.15` gives about 0.11 mm of play at 20°. The function also turns the larger gear by half a tooth, so that a gap faces the pinion.
 
 <Tabs>
   <TabItem label="Meshing Pair Code">
@@ -530,7 +534,7 @@ def make_gear_pair(module, z1, z2, width, pressure_angle_deg=20.0,
         bore2 (float): Gear bore diameter (0 = no bore)
 
     Returns:
-        tuple: (pinion, gear, center_distance) — both positioned for meshing
+        tuple: (pinion, gear, center_distance), both positioned for meshing
     """
     alpha = math.radians(pressure_angle_deg)
 
@@ -558,7 +562,7 @@ def make_gear_pair(module, z1, z2, width, pressure_angle_deg=20.0,
     print(f"  Gear ratio: {z2/z1:.3f}:1")
     print(f"  Contact ratio: {contact_ratio:.3f}")
     if contact_ratio < 1.2:
-        print(f"  WARNING: Contact ratio < 1.2 — consider more teeth")
+        print(f"  WARNING: Contact ratio < 1.2: consider more teeth")
 
     # ─── Generate both gears ───
     pinion = make_spur_gear(
@@ -577,7 +581,9 @@ def make_gear_pair(module, z1, z2, width, pressure_angle_deg=20.0,
     # Rotate the gear so teeth interleave properly
     # The angular offset for meshing:
     #   half-tooth rotation on the gear to fit between pinion teeth
-    mesh_angle = math.pi / z2  # rotate gear by half a tooth pitch
+    # (the extra half turn makes this correct for odd tooth counts too:
+    #  the gear must show a tooth gap, not a tooth, toward the pinion)
+    mesh_angle = math.pi + math.pi / z2  # half turn + half a tooth pitch
 
     gear = (
         gear
@@ -659,7 +665,7 @@ def contact_ratio_analysis(module, z1, z2, pressure_angle_deg=20.0):
     print(f"Total path:        {total_path:.3f} mm")
     print(f"Base pitch:        {p_b:.3f} mm")
     print(f"Contact ratio:     {eps:.3f}")
-    print(f"Status: {'OK' if eps >= 1.2 else 'LOW — increase teeth'}")
+    print(f"Status: {'OK' if eps >= 1.2 else 'LOW: increase teeth'}")
     print(f"{'='*50}")
 
     return eps
@@ -678,47 +684,36 @@ contact_ratio_analysis(2.0, 14, 42)  # 3:1 with fewer teeth
 <InArticleAd />
 
 
-The **Lewis equation** is the classical method for estimating bending stress at the root of a gear tooth. It treats each tooth as a cantilever beam loaded at its tip.
+A gear with the right shape can still fail: a tooth can break off at its root. A tooth is like a short shelf fixed to a wall. A load on its free end stresses it most where it meets the wall, and for a tooth that place is the root. The **Lewis equation** is the classical estimate of this stress. It treats the tooth as such a beam (a cantilever) with the whole load on its tip.
 
 ### The Lewis Equation
 
 $$\sigma_b = \frac{F_t}{b \cdot m \cdot Y}$$
 
 where:
-- $\sigma_b$ = bending stress at the tooth root (MPa)
+- $\sigma_b$ = bending stress at the tooth root (MPa, the same as N/mm²)
 - $F_t$ = tangential force on the tooth (N)
 - $b$ = face width (mm)
 - $m$ = module (mm)
-- $Y$ = Lewis form factor (dimensionless, depends on tooth count and pressure angle)
+- $Y$ = Lewis form factor (a number with no unit, set by the tooth count and the pressure angle)
 
-The tangential force relates to transmitted torque:
+The force comes from the torque $T$ on the gear, in N·mm, and acts at the pitch radius $d/2$:
 
 $$F_t = \frac{2T}{d} = \frac{2T}{m \cdot z}$$
 
-where $T$ is the torque in N-mm.
+Take the first example in the code: $m = 2$ mm, $z = 25$, $b = 12$ mm and a torque of 2 N·m, which is 2,000 N·mm. Then $d = 50$ mm, $F_t = 2 \times 2000 / 50 = 80$ N, and with $Y = 0.340$ the stress is $80 / (12 \times 2 \times 0.340) = 9.8$ MPa. The code allows printed PLA 25 MPa, so the safety factor is $25 / 9.8 = 2.6$.
+
+:::caution[What the Lewis equation leaves out]
+The equation ignores the stress concentration in the root fillet, the extra load from speed and shock, surface wear, and heat, which softens plastic gears. Gear standards (ISO 6336, AGMA 2001) add a factor for each. Keep a safety factor of at least 1.5, and test a printed gear under its real load.
+:::
 
 ### Lewis Form Factor
 
-The Lewis form factor $Y$ depends on the number of teeth and the pressure angle. For $\alpha = 20°$ standard full-depth teeth:
-
-| Number of Teeth $z$ | Lewis Form Factor $Y$ |
-|---------------------|----------------------|
-| 12 | 0.245 |
-| 14 | 0.276 |
-| 17 | 0.303 |
-| 20 | 0.320 |
-| 25 | 0.340 |
-| 30 | 0.358 |
-| 40 | 0.389 |
-| 50 | 0.408 |
-| 60 | 0.421 |
-| 75 | 0.435 |
-| 100 | 0.447 |
-| 150 | 0.460 |
-| 300 | 0.472 |
-| Rack (inf) | 0.484 |
+A gear with more teeth has teeth that are wider at the root, so $Y$ rises with the tooth count: 0.245 for 12 teeth, 0.320 for 20, 0.421 for 60 and 0.484 for a straight rack, for $\alpha = 20°$. The code holds the full table and interpolates between its rows.
 
 ### Stress Calculation Function
+
+The function looks up $Y$, computes the stress as above, and compares it with an allowable value for six materials.
 
 ```python
 def lewis_bending_stress(module, num_teeth, width, torque_Nm,
@@ -897,20 +892,26 @@ find_minimum_width(2.0, 25, 2.0, 45, safety_factor=1.5)
 <InArticleAd />
 
 
-The final project brings everything together: a two-stage gear reduction with shafts, bearing bores, and an enclosing housing, producing a complete 3D-printable assembly.
+A small motor turns fast with little torque, and most loads need the opposite. When a pinion drives a gear with three times as many teeth, the speed falls to one third and the torque rises three times. A ratio of 9:1 in one pair would need a very large gear, so the final project uses two pairs in a row, and their ratios multiply.
 
 ### Gear Train Design Parameters
 
-For this example, we will design a gear train with:
-- **Input speed**: 1000 RPM (from a small DC motor)
-- **Output speed**: approximately 110 RPM
-- **Total reduction ratio**: approximately 9:1 (achieved in two stages)
-- **Stage 1**: 18:54 teeth (3:1 ratio)
-- **Stage 2**: 20:60 teeth (3:1 ratio)
-- **Module**: 2.0 mm for both stages
-- **Face width**: 10 mm
+Each stage has a ratio of 3:1, module 2.0 mm and a face width of 10 mm. The middle shaft carries two gears that turn together: the 54-tooth gear of stage 1 and the 20-tooth pinion of stage 2.
 
-The intermediate shaft carries both the stage 1 gear (54 teeth) and the stage 2 pinion (20 teeth) on the same shaft.
+```text
+ motor            middle             output
+ shaft            shaft              shaft
++------+  mesh  +------+
+| 18 T |------->| 54 T |
++------+        +------+
+                | 20 T |    mesh   +------+
+                +------+---------->| 60 T |
+                                   +------+
+ 1000 RPM        333 RPM            111 RPM
+ 0.5 N·m         1.5 N·m            4.5 N·m
+```
+
+The torques ignore friction, so the real output is a little lower. The first block computes the ratios and the center distances, 72 mm and 80 mm, which place the three shafts on one line.
 
 ```python
 # ─── Gear Train Design Calculation ───
@@ -950,6 +951,8 @@ print(f"  Total width: {x_output:.1f} mm")
 ```
 
 ### Gear Train Assembly Function
+
+`make_gear_train` builds the four gears, places stage 2 in a second layer 3 mm above stage 1, and adds three shafts of 8 mm. `make_gear_housing` (second tab) makes a box with 2 mm of clearance to the gear tips, holes for the bearings (the rings that let a shaft turn in the wall) and four mounting feet.
 
 <Tabs>
   <TabItem label="Assembly Code">
@@ -1242,7 +1245,7 @@ print(f"\nComplete assembly saved to {output_dir}/")
 <InArticleAd />
 
 
-With the gear train designed, verify that every gear in the system can handle the required torque:
+Each gear carries a different torque, so the function below runs the Lewis check four times. With 0.5 N·m at the input it reports 4.5 and 3.4 MPa for stage 1, and 11.7 and 8.9 MPa for stage 2. The highest stress is in the 20-tooth pinion of stage 2: it carries three times the input torque on a small diameter. In a reduction train, check the last pinion first.
 
 ```python
 def verify_gear_train(input_torque_Nm, input_rpm):
@@ -1303,45 +1306,33 @@ A gear train announces trouble through vibration: as teeth wear, pit, or chip, e
 
 <CardGrid>
   <Card title="Minimum Teeth" icon="warning">
-    For 20-degree pressure angle, use at least 17 teeth to avoid undercutting. For 3D printing, 20+ teeth is recommended to ensure the tooth tips are thick enough to print cleanly.
+    Use at least 17 teeth to avoid undercut, and 20 or more so the tooth tips are thick enough to print cleanly.
   </Card>
   <Card title="Module Selection" icon="setting">
-    For FDM printing with a 0.4mm nozzle, use module 1.5 or larger. The tooth tip width at the addendum circle must be at least 2 nozzle widths (0.8mm) for strength.
+    For FDM printing with a 0.4 mm nozzle, use module 1.5 or larger. The tooth tip must be at least two nozzle widths (0.8 mm) wide.
   </Card>
   <Card title="Print Orientation" icon="rocket">
-    Print gears flat (face on the build plate) for strongest teeth. Printing on edge gives better surface finish on the tooth flanks but weaker layer adhesion across the tooth root.
+    Print gears flat on the build plate. The layers then run across each tooth, which gives the strongest tooth root.
   </Card>
   <Card title="Post-Processing" icon="approve-check">
-    Lightly sand the tooth flanks with 400-grit paper and apply a thin coat of lithium grease. This dramatically reduces wear and noise. For nylon (SLS) gears, no post-processing is typically needed.
+    Lightly sand the tooth flanks with 400-grit paper and apply a thin coat of lithium grease. This reduces wear and noise.
   </Card>
 </CardGrid>
-
-### Recommended Parameters by Application
-
-| Application | Module | Min Teeth | Material | Expected Life |
-|------------|--------|-----------|----------|---------------|
-| Educational model | 2.0-3.0 | 17 | PLA | Low duty |
-| Hobby robot | 1.5-2.5 | 20 | PETG/Nylon | Medium duty |
-| Light-duty mechanism | 1.5-2.0 | 25 | Nylon PA12 (SLS) | Thousands of cycles |
-| Prototype testing | 2.0-3.0 | 20 | Acetal (POM) | High duty |
-| Production (low volume) | 1.0-2.0 | 20+ | Steel (CNC) | Continuous |
 
 ## Advanced Topics: Profile Shift
 
 <InArticleAd />
 
 
-When the number of teeth is below 17 (for $\alpha = 20°$), the cutting tool undercuts the tooth root, weakening the tooth. **Profile shift** (also called addendum modification) moves the cutting tool radially outward, preventing undercutting at the cost of a non-standard center distance.
-
-The profile shift coefficient $x$ modifies the gear geometry:
+A pinion with fewer than 17 teeth is undercut. **Profile shift** is the usual cure: the gear is cut with the tool pulled outward by $x \cdot m$, where $x$ is the profile shift coefficient, a number with no unit. The tooth is then thicker at the root. The price is larger tip and root circles and a larger center distance:
 
 $$d_a = m \cdot (z + 2 + 2x)$$
 
 $$d_f = m \cdot (z - 2.5 + 2x)$$
 
-$$a_{shifted} = \frac{m \cdot (z_1 + z_2)}{2} + m \cdot (x_1 + x_2)$$
+$$a_{shifted} \approx \frac{m \cdot (z_1 + z_2)}{2} + m \cdot (x_1 + x_2)$$
 
-For a pinion with 14 teeth, a typical profile shift of $x = +0.3$ eliminates undercutting:
+The last formula is a first estimate: the exact center distance is slightly smaller. For a pinion with 14 teeth, $x = +0.3$ is typical. The function below only prints the shifted diameters. The solid it returns is still the standard gear, and building the shifted tooth is left as an exercise.
 
 ```python
 def make_shifted_gear(module, num_teeth, width, shift_x,
@@ -1381,30 +1372,21 @@ def make_shifted_gear(module, num_teeth, width, shift_x,
     return gear
 ```
 
-:::tip[Profile Shift in Practice]
-Profile shift is one of the most powerful tools in gear design. It allows you to use fewer teeth without undercutting, adjust center distances to fit existing shaft layouts, and balance the bending stress between pinion and gear. For a detailed implementation, the involute generation must account for the shifted addendum and dedendum circles.
-:::
-
 ## Summary
 
 <InArticleAd />
 
 
 <Card title="What You Built" icon="approve-check">
-In this lesson, you built a complete involute gear system from mathematical first principles:
-
-- **Involute mathematics**: parametric equations, base circle, pressure angle, involute function
-- **Single gear generator**: `make_spur_gear()` with configurable module, teeth, width, bore, and hub
-- **Meshing pair**: center distance calculation, contact ratio verification, backlash control
-- **Lewis bending stress**: tooth root stress analysis with material safety factors
-- **Two-stage gear train**: four gears, three shafts, housing with bearing bores, mounting feet
-- **Export**: individual STEP/STL files and a complete colored assembly
-
-Every parameter is a Python variable. Change the module, tooth count, or torque requirement and the entire design regenerates with updated geometry and stress verification.
+- **Involute**: the curve of a string unwound from the base circle
+- **Gear generator**: `make_spur_gear()` from module, teeth and width
+- **Meshing pair**: center distance, contact ratio and backlash
+- **Lewis bending stress**: a first check of the tooth root, with its limits
+- **Two-stage gear train**: four gears, three shafts and a housing
 </Card>
 
 :::tip[Next Lesson]
-In [Lesson 3: Custom Enclosure from PCB Data](./custom-enclosure-pcb-data), you will parse KiCad PCB files to automatically generate enclosures with standoffs, port cutouts, ventilation patterns, snap-fits, and lids, combining parametric geometry with real-world electronic board data.
+[Custom Enclosure from PCB Data](/education/code-based-mechanical-design/custom-enclosure-pcb-data/) reads a circuit board file and generates a printed box around the board.
 :::
 
 <CodeBasedMechanicalDesignComments />

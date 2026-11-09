@@ -25,7 +25,7 @@ import { Card, CardGrid, Badge, Steps, LinkButton, FileTree } from '@astrojs/sta
 
 import CodeBasedMechanicalDesignComments from '../../../../components/code-based-mechanical-design/CodeBasedMechanicalDesignComments.astro';
 
-A spring that meets the required force at the required deflection can still fail in the field if the wire stress exceeds the fatigue limit at the inner coil surface, where curvature concentrates shear stress. Catalog springs come in fixed sizes; when your application needs a specific rate, solid height, or endurance life, you design from scratch. In this lesson you will engineer compression, extension, and torsion springs from load specifications using CadQuery helix sweeps, verify each design with the Wahl correction factor for stress concentration and the Goodman diagram for infinite-life fatigue, and export production-ready STEP and STL files. #SpringDesign #StressAnalysis #MechanicalEngineering
+A spring can give exactly the right force on the test bench and still break after a few months in the machine. The wire was stressed too close to its limit, and each cycle did a little damage until a crack ran through a coil. In this lesson you size a spring from its loads, check the wire stress against a static limit and a fatigue limit, and then build the 3D model in CadQuery, a Python library that makes solid models from code. #SpringDesign #StressAnalysis #MechanicalEngineering
 
 ## Learning Objectives
 
@@ -41,76 +41,36 @@ By the end of this lesson, you will be able to:
 
 <InArticleAd />
 
+A helical spring is a wire wound into coils. The load it resists decides which stress the wire carries.
 
 ```text
-  Spring Types: Load and Geometry
-  ──────────────────────────────────────────
   COMPRESSION          EXTENSION            TORSION
   (resists push)       (resists pull)       (resists twist)
 
      ↓ F                  ↑ F                   ↻ M
    ┌─────┐            ┌───────┐            ┌───────┐
-   │  O  │ pitch p     │ hook  │            │ leg   │
-   │  O  │             │ O O O │            │ O O O │
-   │  O  │ Na coils    │ O O O │ Na coils   │ O O O │ wound
-   │  O  │             │ O O O │            │ O O O │ coils
+   │  O  │             │ hook  │            │ leg   │
+   │  O  │ coils       │ O O O │ coils      │ O O O │ coils
+   │  O  │ apart       │ O O O │ touch      │ O O O │ touch
    │  O  │             │ hook  │            │  leg  │
    └─────┘            └───────┘            └───────┘
-   Free length Lf      Initial tension Fi   Deflection: angle θ
-   Rate: k = F/δ       Hook stress critical Rate: kθ = M/θ
-   Stress: shear       Stress: shear        Stress: bending
+   wire: shear         wire: shear          wire: bending
 ```
 
 <Tabs>
   <TabItem label="Compression Springs">
 
-Compression springs resist axial compressive loads and are the most common spring type. They are wound with space between coils (pitch) and shorten under load.
-
-**Typical applications:**
-- Valve return springs in engines
-- Battery contacts in electronics
-- Suspension systems in vehicles
-- Push-button mechanisms
-
-**Key design parameters:**
-- Free length $L_f$: unloaded length
-- Solid height $L_s$: fully compressed (coils touching)
-- Spring rate $k$: force per unit deflection (N/mm)
-- Working deflection range: between installed and maximum compression
+The most common type. The coils are wound with a gap and close up under load. Examples: valve springs, battery contacts, push buttons.
 
 </TabItem>
 <TabItem label="Extension Springs">
 
-Extension springs resist axial tensile loads. They are wound with initial tension (coils touching at zero load) and hooks or loops at each end for attachment.
-
-**Typical applications:**
-- Garage door counterbalance
-- Trampolines and exercise equipment
-- Retractable mechanisms (tape measures, screen doors)
-- Tensioning devices in machinery
-
-**Key design parameters:**
-- Free length $L_f$: including hooks
-- Initial tension $F_i$: preload before coils begin to separate
-- Body length $L_b$: coil section only (excluding hooks)
-- Hook stress: hooks are stress concentrators and often the failure point
+The coils are wound pressed together, and a hook at each end takes the pull. Examples: trampolines, door closers, belt tensioners.
 
 </TabItem>
 <TabItem label="Torsion Springs">
 
-Torsion springs resist rotational loads (torque). The wire is loaded in bending, not shear, which fundamentally changes the stress analysis.
-
-**Typical applications:**
-- Clothespins and binder clips
-- Door hinges (self-closing)
-- Mouse traps
-- Clipboard mechanisms
-
-**Key design parameters:**
-- Torque $M$ at working angle
-- Angular rate $k_\theta$: torque per radian (N-mm/rad)
-- Leg length and configuration: straight, hooked, or formed
-- Body diameter change: the coil diameter decreases as the spring winds tighter
+Two legs apply a turning load (torque). The name misleads: the wire is bent, not twisted. Examples: clothes pegs, binder clips, mouse traps.
 
 </TabItem>
 </Tabs>
@@ -120,32 +80,47 @@ Torsion springs resist rotational loads (torque). The wire is loaded in bending,
 <InArticleAd />
 
 
-The fundamental equations for a close-coiled helical compression spring with round wire:
+A compression spring looks squeezed, but its wire is twisted. The force $F$ acts along the axis, and the wire sits half a coil diameter $D$ away from it. A force at a distance is a torque, so the wire carries the torque $T = F \cdot D / 2$, as a bolt is twisted by a hand on the end of a wrench.
+
+```text
+        F │   force on the spring axis
+          ▼
+   ┌──────┼──────┐
+   │ O    ┊    O │   O = wire, cut through
+   │ O    ┊    O │
+   └──────┼──────┘   ├──────┤ arm = D/2
+          ▲          torque in the wire = F × D/2
+        F │
+```
+
+The equations hold for round wire and a load along the axis.
 
 ### Spring Rate
 
-The spring rate (stiffness) relates force to deflection:
+The spring rate $k$ is the force needed for each millimetre of deflection:
 
 $$
 k = \frac{F}{\delta} = \frac{G d^4}{8 D^3 N_a}
 $$
 
 where:
-- $k$ = spring rate (N/mm)
-- $G$ = shear modulus of the wire material (MPa)
+- $k$ = spring rate (N/mm), $F$ = force (N), $\delta$ = deflection (mm)
+- $G$ = shear modulus of the wire (MPa), its stiffness against twisting
 - $d$ = wire diameter (mm)
-- $D$ = mean coil diameter (mm), from center of wire on one side to center of wire on the opposite side
-- $N_a$ = number of active coils
+- $D$ = mean coil diameter (mm), measured between wire centers
+- $N_a$ = number of active coils, those free to deflect
+
+The rate grows with $d^4$ and falls with $D^3$: wire 20% thinner gives only 41% of the rate.
 
 ### Spring Index
 
-The spring index $C$ is the ratio of coil diameter to wire diameter:
+The spring index $C$ says how tightly the wire is curved. It has no unit:
 
 $$
 C = \frac{D}{d}
 $$
 
-Practical range: $4 \leq C \leq 12$. Below 4, the spring is difficult to manufacture. Above 12, it is prone to buckling and tangling.
+Keep $4 \leq C \leq 12$. Below 4 the wire is bent so sharply that it can crack in coiling, and the stress inside the coil rises steeply. Above 12 the spring is loose: it tangles and buckles.
 
 ### Deflection and Free Length
 
@@ -153,15 +128,15 @@ $$
 \delta = \frac{F}{k} = \frac{8 F D^3 N_a}{G d^4}
 $$
 
-Free length for a compression spring with squared-and-ground ends:
+The free length $L_f$ is the length with no load. It holds the wire itself, the largest deflection, and a reserve so the coils never touch in service:
 
 $$
 L_f = L_s + \delta_{\text{max}} + \delta_{\text{clash}}
 $$
 
 where:
-- $L_s = (N_a + 2) \cdot d$: solid height (squared-and-ground ends add 2 dead coils)
-- $\delta_{\text{clash}}$: additional clearance to prevent coil clash at maximum load (typically 10-15% of maximum working deflection)
+- $L_s = (N_a + 2) \cdot d$ is the solid height (mm), the length when all coils touch. Squared-and-ground ends, closed and ground flat so the spring stands straight, add 2 coils that do not deflect.
+- $\delta_{\text{clash}}$ is the reserve (mm), 10 to 15% of the working deflection
 
 ### Pitch and Coil Spacing
 
@@ -169,49 +144,50 @@ $$
 p = \frac{L_f - 2d}{N_a}
 $$
 
-where $p$ is the pitch (axial distance between corresponding points on adjacent coils).
+where $p$ is the pitch (mm), the distance along the axis from one active coil to the next.
 
 ## Material Selection
 
 <InArticleAd />
 
+The shear modulus $G$ of the wire sets the rate. Its ultimate tensile strength $S_{ut}$, the stress at which it breaks in a pull test, sets every stress limit used later.
 
 <CardGrid>
   <Card title="Music Wire (ASTM A228)" icon="approve-check">
     **Tensile strength:** 1600-2200 MPa (varies with diameter)
-    **Max temp:** 120 C (250 F)
+    **Max temp:** 120 °C
     **Shear modulus:** G = 81,700 MPa
-    **Use:** High-quality springs, instruments, general purpose. The most common spring wire material.
+    **Use:** The most common spring wire.
   </Card>
 
   <Card title="Stainless Steel 302 (ASTM A313)" icon="approve-check">
     **Tensile strength:** 1200-1800 MPa
-    **Max temp:** 260 C (500 F)
+    **Max temp:** 260 °C
     **Shear modulus:** G = 69,000 MPa
-    **Use:** Corrosive environments, food processing, medical devices. Lower strength than music wire but excellent corrosion resistance.
+    **Use:** Wet or corrosive places, food and medical equipment.
   </Card>
 
   <Card title="Chrome Vanadium (ASTM A231)" icon="approve-check">
     **Tensile strength:** 1400-1900 MPa
-    **Max temp:** 220 C (430 F)
+    **Max temp:** 220 °C
     **Shear modulus:** G = 77,200 MPa
-    **Use:** Automotive valve springs, high-fatigue applications. Excellent fatigue resistance and impact properties.
+    **Use:** Engine valve springs and other heavy cycling.
   </Card>
 
   <Card title="Chrome Silicon (ASTM A401)" icon="approve-check">
     **Tensile strength:** 1500-2000 MPa
-    **Max temp:** 245 C (475 F)
+    **Max temp:** 245 °C
     **Shear modulus:** G = 77,200 MPa
-    **Use:** High-stress, high-temperature applications. Superior to chrome vanadium for shock loading.
+    **Use:** High stress, high temperature and shock loads.
   </Card>
 </CardGrid>
 
 ### Wire Diameter Selection from Standard Gauges
 
-Spring wire is manufactured in standard diameters. Always select the nearest standard size:
+Wire is sold in standard diameters, so round a calculated diameter up to the next size. Thin wire is stronger than thick wire: the curve fit $S_{ut} = A / d^m$ in the code gives about 2,000 MPa at 2 mm.
 
 ```python
-# Standard music wire diameters (mm) — partial table
+# Standard music wire diameters (mm): partial table
 MUSIC_WIRE_DIAMETERS = [
     0.10, 0.12, 0.14, 0.16, 0.18, 0.20, 0.22, 0.25,
     0.28, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60,
@@ -253,29 +229,32 @@ def select_wire_diameter(d_required: float) -> float:
 <InArticleAd />
 
 
-The simple torsional shear stress formula $\tau = 8FD / (\pi d^3)$ underestimates the actual maximum stress because it ignores:
-1. The **curvature effect**: the inner surface of the coil has a shorter path, concentrating stress
-2. The **direct shear** component: the transverse shear force adds to the torsional shear
+Twisting a straight round bar with the torque $F D / 2$ gives the shear stress $\tau = 8FD / (\pi d^3)$ at its surface, in MPa for N and mm. Shear stress is the stress of layers sliding over each other. For a coiled wire this reads too low, for two reasons:
 
-The **Wahl correction factor** $K_w$ accounts for both effects:
+1. Curvature. The inside of the coil is shorter than the outside, so less material takes the same twist there.
+2. Direct shear. The force $F$ also tries to cut straight across the wire, which adds stress on the inside of the coil.
+
+The Wahl correction factor $K_w$ covers both. It depends only on the spring index $C$:
 
 $$
 K_w = \frac{4C - 1}{4C - 4} + \frac{0.615}{C}
 $$
 
-The corrected maximum shear stress at the inner surface of the coil is:
+It is 1.40 at $C = 4$, 1.18 at $C = 8$ and 1.12 at $C = 12$. The highest shear stress, on the inside of the coil, is:
 
 $$
 \tau_{\max} = K_w \cdot \frac{8 F D}{\pi d^3}
 $$
 
-For design safety, this stress must not exceed the allowable shear stress:
+It must stay below an allowable value:
 
 $$
 \tau_{\max} \leq \tau_{\text{allow}} = \frac{S_{sy}}{n_s}
 $$
 
-where $S_{sy}$ is the shear yield strength (approximately $0.45 \cdot S_{ut}$ for set-removed springs) and $n_s$ is the safety factor (typically 1.2-1.5 for static loading).
+where $S_{sy}$ is the shear yield strength (MPa), at which the wire takes a permanent set, and $n_s$ is the safety factor, 1.2 to 1.5 for a steady load. For music wire $S_{sy}$ is about $0.45 \cdot S_{ut}$, or $0.60$ to $0.70 \cdot S_{ut}$ after set removal.
+
+The code's example, 50 N with $D = 20$ mm and $d = 2$ mm, prints $K_w = 1.145$ and 364.4 MPa.
 
 ```python
 import numpy as np
@@ -320,34 +299,38 @@ print(f"Max shear stress: {tau:.1f} MPa")
 <InArticleAd />
 
 
-Springs in cyclic applications (valve springs, suspension springs) must be designed for **infinite life**, typically $10^6$ to $10^7$ cycles or more. The Goodman diagram is the standard approach for assessing fatigue resistance under fluctuating shear stress.
+A paper clip bent once does not break. Bent back and forth, it breaks under a small load. This is fatigue: a repeated stress can start a crack without ever reaching the yield strength. A valve spring cycles millions of times, so it is designed for infinite life, in practice more than $10^6$ to $10^7$ cycles.
 
 ### Alternating and Mean Stress
 
-For a spring cycling between a minimum force $F_{\min}$ and maximum force $F_{\max}$:
-
-$$
-\tau_a = K_w \cdot \frac{8 F_a D}{\pi d^3}, \quad \tau_m = K_w \cdot \frac{8 F_m D}{\pi d^3}
-$$
-
-where the alternating and mean forces are:
+Fatigue damage depends on how far the stress swings and on the level it swings around. Split the load, which cycles between $F_{\min}$ and $F_{\max}$, into an alternating part $F_a$ and a mean part $F_m$ (N):
 
 $$
 F_a = \frac{F_{\max} - F_{\min}}{2}, \quad F_m = \frac{F_{\max} + F_{\min}}{2}
 $$
 
+Each gives a shear stress by the same formula as before:
+
+$$
+\tau_a = K_w \cdot \frac{8 F_a D}{\pi d^3}, \quad \tau_m = K_w \cdot \frac{8 F_m D}{\pi d^3}
+$$
+
 ### Goodman Criterion for Infinite Life
 
-The Goodman line defines the boundary between safe (infinite life) and unsafe (finite life) operation:
+In the Goodman rule the swing and the mean each use a share of what the material can take, and the two shares together must stay below 1:
 
 $$
 \frac{\tau_a}{S_{se}} + \frac{\tau_m}{S_{su}} \leq \frac{1}{n_f}
 $$
 
 where:
-- $S_{se}$ = endurance limit in shear (approximately $0.30 \cdot S_{ut}$ for unpeened, $0.40 \cdot S_{ut}$ for shot-peened springs)
-- $S_{su}$ = ultimate shear strength (approximately $0.67 \cdot S_{ut}$)
-- $n_f$ = fatigue safety factor (typically 1.3-2.0)
+- $S_{se}$ = endurance limit in shear (MPa), the swing the wire survives without limit at zero mean. About $0.30 \cdot S_{ut}$, or $0.40 \cdot S_{ut}$ after shot peening, which hammers the surface with small steel balls.
+- $S_{su}$ = ultimate shear strength (MPa), about $0.67 \cdot S_{ut}$
+- $n_f$ = fatigue safety factor, usually 1.3 to 2.0
+
+These factors of $S_{ut}$ are typical values. For a spring that matters, use the wire maker's fatigue data.
+
+The example in the code, $D = 18$ mm and $d = 2$ mm cycling between 20 N and 80 N, gives $\tau_a = 200$ MPa, $\tau_m = 333$ MPa and $n_f = 1.72$, above the required 1.5.
 
 ```python
 def goodman_fatigue_check(
@@ -429,6 +412,8 @@ for key, val in result.items():
 
 ### Goodman Diagram Visualization
 
+The diagram plots alternating stress against mean stress. The Goodman line runs from $S_{se}$ on the vertical axis to $S_{su}$ on the horizontal axis, and a spring is safe when its point lies below the line.
+
 ```python
 import matplotlib.pyplot as plt
 import numpy as np
@@ -499,13 +484,16 @@ def plot_goodman_diagram(result: dict, title: str = "Goodman Diagram"):
     plt.show()
 
 # Plot for our example
-# plot_goodman_diagram(result, "Spring Fatigue — Goodman Diagram")
+# plot_goodman_diagram(result, "Spring Fatigue: Goodman Diagram")
 ```
 
 ## CadQuery Spring Geometry Generation
 
 <InArticleAd />
 
+All three functions compute points along the center line of the wire, join them with a smooth curve (a spline), and sweep a circle of the wire diameter along it, like paste pressed from a tube. The model shows shape and fit only. The stress checks come from the formulas above.
+
+Look for the two flat end coils of the compression spring, the hooks of the extension spring, and the legs of the torsion spring at the angle you asked for.
 
 <Tabs>
   <TabItem label="Compression Spring">
@@ -513,6 +501,21 @@ def plot_goodman_diagram(result: dict, title: str = "Goodman Diagram"):
 ```python
 import cadquery as cq
 import numpy as np
+
+def sweep_round_wire(points, d: float) -> cq.Workplane:
+    """Sweep a round wire of diameter d along a smooth path.
+
+    The circle is drawn at the first point of the path, on a plane
+    at a right angle to the direction of the path at that point.
+    """
+    path = cq.Workplane("XY").spline(points)
+    start = cq.Vector(*points[0])
+    tangent = path.val().tangentAt(0)
+    wire_profile = (
+        cq.Workplane(cq.Plane(origin=start, normal=tangent))
+        .circle(d / 2)
+    )
+    return wire_profile.sweep(path, isFrenet=True)
 
 def compression_spring(
     d: float,          # Wire diameter (mm)
@@ -546,7 +549,7 @@ def compression_spring(
         total_coils = N_a
 
     # Generate helix as a series of points
-    points_per_coil = 72  # Angular resolution
+    points_per_coil = 16  # Angular resolution (the spline smooths between points)
     total_points = int(total_coils * points_per_coil)
 
     helix_points = []
@@ -564,7 +567,7 @@ def compression_spring(
                 # Last dead coil: transition back to zero pitch
                 t_end = t - (total_coils - 1.0)
                 z_start = d + (N_a) * pitch
-                z = z_start + d * (1.0 - t_end / 1.0)
+                z = z_start + d * (t_end / 1.0)  # Linear ramp over the last coil
             else:
                 # Active coils: constant pitch
                 z = d + (t - 1.0) * pitch
@@ -575,19 +578,9 @@ def compression_spring(
         y = R * np.sin(angle)
         helix_points.append((x, y, z))
 
-    # Create helix path as a spline
-    path = cq.Workplane("XY").spline(helix_points)
-
-    # Create wire cross-section at the start of the helix
-    # Position the circle at the first point, normal to the helix
-    wire_profile = (
-        cq.Workplane("YZ")
-        .transformed(offset=(R, 0, helix_points[0][2]))
-        .circle(d / 2)
-    )
-
-    # Sweep the circular profile along the helix path
-    spring = wire_profile.sweep(path, isFrenet=True)
+    # Create the helix path as a spline and sweep the circular
+    # wire cross-section along it, starting normal to the helix
+    spring = sweep_round_wire(helix_points, d)
 
     return spring
 
@@ -641,14 +634,14 @@ def extension_spring(
     body_pitch = d  # Coils touching
     body_length = N_a * body_pitch
 
-    points_per_coil = 72
+    points_per_coil = 16
     total_body_points = int(N_a * points_per_coil)
 
     # Build full path: bottom hook + body + top hook
     all_points = []
 
     # Bottom hook: half-loop + straight section
-    hook_points = 36  # Half a coil
+    hook_points = 8  # Half a coil
     for i in range(hook_points + 1):
         angle = np.pi * (i / hook_points)  # 0 to pi
         # Hook curves from center out to coil radius
@@ -657,9 +650,10 @@ def extension_spring(
         hz = -hook_length * (1 - i / hook_points)
         all_points.append((hx, hy, hz))
 
-    # Body coils
-    for i in range(total_body_points + 1):
-        angle = np.pi + 2 * np.pi * (i / points_per_coil)
+    # Body coils (start where the bottom hook ends: at angle pi/2;
+    # i starts at 1 so that this point is not added twice)
+    for i in range(1, total_body_points + 1):
+        angle = np.pi / 2 + 2 * np.pi * (i / points_per_coil)
         t = i / points_per_coil
         x = R * np.cos(angle)
         y = R * np.sin(angle)
@@ -668,7 +662,7 @@ def extension_spring(
 
     # Top hook: half-loop + straight section
     z_top = body_length
-    start_angle = np.pi + 2 * np.pi * N_a
+    start_angle = np.pi / 2 + 2 * np.pi * N_a
     for i in range(1, hook_points + 1):
         angle = start_angle + np.pi * (i / hook_points)
         hx = R * np.cos(angle)
@@ -677,19 +671,7 @@ def extension_spring(
         all_points.append((hx, hy, hz))
 
     # Create path and sweep
-    path = cq.Workplane("XY").spline(all_points)
-
-    wire_profile = (
-        cq.Workplane("YZ")
-        .transformed(offset=(
-            all_points[0][0],
-            all_points[0][1],
-            all_points[0][2]
-        ))
-        .circle(d / 2)
-    )
-
-    spring = wire_profile.sweep(path, isFrenet=True)
+    spring = sweep_round_wire(all_points, d)
     return spring
 
 # Extension spring: 1.5mm wire, 12mm coil, 15 coils
@@ -731,22 +713,29 @@ def torsion_spring(
     R = D / 2
     body_pitch = d  # Coils touching
 
-    points_per_coil = 72
-    total_body_points = int(N_a * points_per_coil)
+    # The second leg leaves the coil along its tangent. A whole number
+    # of coils would put the two legs 180 degrees apart, so the body
+    # gets a part of a turn extra to reach the requested leg angle.
+    body_turns = N_a + (180.0 - leg_angle) / 360.0
+
+    points_per_coil = 16
+    total_body_points = int(round(body_turns * points_per_coil))
 
     all_points = []
 
     # First leg: straight section tangent to the coil
     # Extends tangentially from the start of the coil
-    n_leg_pts = 20
+    n_leg_pts = 4
     start_angle = 0
     # Tangent direction at start: perpendicular to radius
     tx = -np.sin(start_angle)
     ty = np.cos(start_angle)
     for i in range(n_leg_pts, 0, -1):
         frac = i / n_leg_pts
-        lx = R * np.cos(start_angle) + tx * leg_length * frac
-        ly = R * np.sin(start_angle) + ty * leg_length * frac
+        # The leg lies behind the start of the coil (minus sign),
+        # so the wire runs straight into the first coil
+        lx = R * np.cos(start_angle) - tx * leg_length * frac
+        ly = R * np.sin(start_angle) - ty * leg_length * frac
         lz = 0
         all_points.append((lx, ly, lz))
 
@@ -760,12 +749,12 @@ def torsion_spring(
         all_points.append((x, y, z))
 
     # Second leg: extends tangentially at the end
-    end_angle = start_angle + 2 * np.pi * N_a
-    # Adjust for desired angle between legs
+    end_angle = start_angle + 2 * np.pi * total_body_points / points_per_coil
+    # The extra part of a turn above sets the angle between the legs
     leg2_angle = end_angle
     tx2 = -np.sin(leg2_angle)
     ty2 = np.cos(leg2_angle)
-    z_end = N_a * body_pitch
+    z_end = (total_body_points / points_per_coil) * body_pitch
     for i in range(1, n_leg_pts + 1):
         frac = i / n_leg_pts
         lx = R * np.cos(leg2_angle) + tx2 * leg_length * frac
@@ -774,19 +763,7 @@ def torsion_spring(
         all_points.append((lx, ly, lz))
 
     # Create path and sweep
-    path = cq.Workplane("XY").spline(all_points)
-
-    wire_profile = (
-        cq.Workplane("YZ")
-        .transformed(offset=(
-            all_points[0][0],
-            all_points[0][1],
-            all_points[0][2]
-        ))
-        .circle(d / 2)
-    )
-
-    spring = wire_profile.sweep(path, isFrenet=True)
+    spring = sweep_round_wire(all_points, d)
     return spring
 
 # Torsion spring: 1.2mm wire, 10mm coil, 5 coils, 25mm legs
@@ -803,8 +780,6 @@ cq.exporters.export(torsion, "torsion_spring.step")
 
 <InArticleAd />
 
-
-This section walks through the full design process from a load specification to a verified, exportable spring.
 
 ### Design Requirements
 
@@ -831,6 +806,8 @@ This section walks through the full design process from a load specification to 
 
 5. **Compute all physical dimensions and generate 3D model**
 </Steps>
+
+The script needs a rate of $k = (80 - 20) / 15 = 4$ N/mm, fixes the spring index at 8 and tries five wire sizes. The coil diameter follows from the index and the coil count from the rate, so the stress checks decide. Wire of 1.6 mm fails both checks (754 MPa against 715 allowed, $n_f = 1.26$). Wire of 1.8 mm passes with little margin ($n_f = 1.56$). Wire of 2.0 mm passes well (482 MPa against 692 allowed, $n_f = 1.90$) and is chosen. The final spring has 10 active coils, a rate of 3.99 N/mm, a solid height of 24.0 mm and a free length of 46.3 mm.
 
 ```python
 import numpy as np
@@ -982,19 +959,19 @@ print("\nExported: spring_verified.step, spring_verified.stl")
 
 <CardGrid>
   <Card title="Buckling Prevention" icon="warning">
-    Springs with a free-length-to-diameter ratio $L_f / D > 4$ are prone to buckling under compression. For ratios above 4, use a guide rod or bore to constrain lateral motion. The critical buckling deflection is approximately $\delta_{cr} = 0.818 \cdot L_f \cdot (1 - \sqrt{1 - (2.62 D / L_f)^2})$.
+    A long thin spring bows sideways under load. When $L_f / D > 4$, guide it on a rod or in a bore. The deflection at which it buckles is about $\delta_{cr} = 0.818 \cdot L_f \cdot (1 - \sqrt{1 - (2.62 D / L_f)^2})$. The spring designed above has $L_f / D = 2.9$.
   </Card>
 
   <Card title="Surge Frequency" icon="warning">
-    The natural frequency of a compression spring must be at least 13x higher than the operating frequency to avoid resonance (surge). Natural frequency: $f_n = \frac{d}{2\pi N_a D^2}\sqrt{\frac{G g}{32 \rho}}$ where $\rho$ is the wire density and $g$ is gravitational acceleration.
+    A spring driven near its own natural frequency resonates (surge). Keep the natural frequency at least 13 times the operating frequency. Between two flat plates, $f_n = \frac{d}{2\pi N_a D^2}\sqrt{\frac{G}{2 \rho}}$, where $\rho$ is the density of the wire (SI units: m, Pa, kg/m³). The spring designed above gives about 280 Hz.
   </Card>
 
   <Card title="Set Removal" icon="approve-check">
-    New springs are typically compressed to solid height during manufacturing ("set removal" or "presetting"). This induces beneficial residual stresses and raises the apparent yield strength by approximately 10-15%. Always specify set-removed springs for fatigue applications.
+    The maker presses a new spring to solid height once. The wire yields a little, and the stress left behind raises the usable yield strength by 10 to 15%. Specify it for springs that cycle.
   </Card>
 
   <Card title="End Conditions" icon="setting">
-    Squared-and-ground ends provide the best perpendicularity and load distribution. Plain ends are cheaper but create eccentric loading. For critical applications, specify squareness tolerance (typically 3 degrees maximum).
+    Squared-and-ground ends seat flat and load the spring evenly. Plain ends are cheaper but load it off center.
   </Card>
 </CardGrid>
 
@@ -1003,19 +980,21 @@ print("\nExported: spring_verified.step, spring_verified.stl")
 <InArticleAd />
 
 
-Extension springs have a unique characteristic, **initial tension** $F_i$. This is the force required just to begin separating the coils (before any deflection occurs). The spring rate equation is modified:
+The coils of an extension spring are wound pressed together. The initial tension $F_i$ (N) is the pull needed before they start to separate, so the force at a deflection $\delta$ is:
 
 $$
 F = F_i + k \cdot \delta
 $$
 
-The initial tension is created during winding by twisting the wire as it is coiled. Typical initial tension ranges:
+The maker sets $F_i$ by twisting the wire as it is coiled. It is specified by the shear stress it causes:
 
 $$
 \tau_i = \frac{8 F_i D}{\pi d^3}
 $$
 
-The recommended range for $\tau_i$ is 10-30% of the torsional yield strength, depending on the spring index $C$.
+A practical $\tau_i$ is 10 to 30% of the shear yield strength, lower at a high spring index $C$.
+
+The function sizes the body as for a compression spring, then checks the hook. A hook is a sharp bend that carries the full load in bending, so `sigma_hook` is usually the highest stress and the hook is where extension springs break.
 
 ```python
 def extension_spring_design(
@@ -1066,32 +1045,32 @@ def extension_spring_design(
 <InArticleAd />
 
 
-Torsion springs are loaded in **bending**, not shear. The maximum bending stress on the inner surface of the coil is:
+A torque on the legs winds the coil tighter, and that bends the wire along its whole length. Bending stress pulls one side of the wire and presses the other. It is highest on the inside of the coil:
 
 $$
 \sigma_b = K_b \cdot \frac{32 M}{\pi d^3}
 $$
 
-where $M$ is the applied torque and $K_b$ is the bending stress correction factor:
+where $\sigma_b$ is in MPa, $M$ is the applied torque (N·mm), and $K_b$ corrects for the curvature of the wire, as $K_w$ did for shear:
 
 $$
 K_b = \frac{4C^2 - C - 1}{4C(C - 1)}
 $$
 
-The angular rate of a torsion spring is:
+The angular rate is the torque for each radian of rotation $\theta$:
 
 $$
 k_\theta = \frac{M}{\theta} = \frac{E d^4}{64 D N_a} \quad \text{(N-mm per radian)}
 $$
 
-where $E$ is Young's modulus (not shear modulus, since torsion springs are loaded in bending).
+where $E$ is Young's modulus (MPa), the stiffness in bending. It replaces $G$ because the wire is bent, not twisted.
 
 :::caution[Torsion Spring Direction]
-Torsion springs must be wound so that the applied torque **tightens** the coil (reduces the coil diameter). Loading in the opening direction creates tensile stress on the inner surface and can cause premature failure. Always specify the winding direction (left-hand or right-hand) based on the loading direction.
+Load a torsion spring only in the direction that tightens the coil. Loading it open puts tension on the inside surface and can break it early. State the winding direction (left-hand or right-hand) on the drawing.
 :::
 
 :::tip[Instrument it]
-A spring's calculated rate and its real rate often differ, because wire diameter, free length, and end conditions all drift in manufacturing, and a 3D-printed or wound spring relaxes over time. Press it against a load cell while reading travel with a dial gauge or a linear potentiometer, and you get the true force-deflection curve, and so the actual rate. An ESP32 or STM32 logs it, and on a spring that holds a preload you can [watch for relaxation](https://siliconwit.io) as the force quietly sags over thousands of cycles.
+The real rate of a spring often differs from the calculated one, because wire diameter varies in manufacture and a spring relaxes over time. Press it against a load cell and read the travel with a dial gauge to get the true force-deflection curve. An ESP32 or STM32 can log it, and on a spring that holds a preload you can [watch for relaxation](https://siliconwit.io) over thousands of cycles.
 :::
 
 ## Summary and Key Takeaways
@@ -1100,24 +1079,24 @@ A spring's calculated rate and its real rate often differ, because wire diameter
 
 
 <CardGrid>
-  <Card title="Design from Requirements" icon="setting">
-    Start with force, deflection, and space constraints. Derive wire diameter, coil geometry, and coil count from the spring rate equation. Select the nearest standard wire gauge.
+  <Card title="Design from requirements" icon="setting">
+    The rate equation gives the coil count, and the stress limit gives the wire. Round the wire up to a standard size.
   </Card>
 
-  <Card title="Always Check Stress" icon="warning">
-    The Wahl correction factor accounts for curvature-induced stress concentration. Ignoring it underestimates the true maximum shear stress by 15-30% for typical spring indices.
+  <Card title="The wire is twisted" icon="warning">
+    The Wahl factor adds the effect of curvature: 12% at a spring index of 12, 40% at an index of 4.
   </Card>
 
-  <Card title="Fatigue is Non-Negotiable" icon="danger">
-    For any spring that cycles, perform a Goodman analysis. Shot-peening the spring increases the endurance limit by approximately 33% and is standard practice for fatigue-critical springs.
+  <Card title="Check fatigue for every spring that cycles" icon="danger">
+    The Goodman rule counts the swing and the mean stress together.
   </Card>
 
-  <Card title="Code = Repeatable Design" icon="approve-check">
-    The complete design calculation, verification, and 3D generation pipeline runs in seconds. Change one requirement and the entire design updates, including stress checks and geometry.
+  <Card title="One script, many springs" icon="approve-check">
+    Change one requirement and the sizes, the checks and the 3D model follow.
   </Card>
 </CardGrid>
 
-**Next lesson:** In the capstone project, we close the loop between CadQuery geometry generation and FreeCAD FEM analysis. You will build a parametric bracket, automatically mesh and solve with CalculiX, sweep a 3D parameter space, and select the optimal design from a Pareto front.
+**Next:** [FEA-driven structural optimization](/education/code-based-mechanical-design/fea-driven-structural-optimization/) checks a bracket with a finite element solver, for shapes where no formula like the ones above exists.
 
 <CodeBasedMechanicalDesignComments />
 

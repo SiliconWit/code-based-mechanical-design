@@ -1,10 +1,10 @@
 ---
 title: "Custom Enclosure from PCB Data"
-description: "Parse KiCad PCB files to auto-generate enclosures with standoffs, port cutouts, ventilation patterns, snap-fits, and lids, all driven by real board data with CadQuery"
+description: "Parse KiCad PCB files to auto-generate enclosures with standoffs, port cutouts, ventilation patterns and a screwed lid, all driven by real board data with CadQuery. The snap-fit as listed does not latch, and the lesson says why"
 contributors: "sam-macharia,consolata-kiiru,bright-gitari"
 pubDate: 2026-03-04
 tags: ["cadquery", "python", "enclosure-design", "pcb", "kicad", "3d-printing", "snap-fit", "parametric-design"]
-excerpt: "Parse KiCad PCB files to auto-generate enclosures with standoffs, port cutouts, ventilation patterns, snap-fits, and lids, all driven by real board data with CadQuery."
+excerpt: "Parse KiCad PCB files to auto-generate enclosures with standoffs, port cutouts, ventilation patterns and a screwed lid, all driven by real board data with CadQuery."
 heroImage: "https://cdn.siliconwit.com/education/code-based-mechanical-design/custom-enclosure-pcb-data.png"
 ---
 
@@ -25,7 +25,7 @@ import { Card, CardGrid, Badge, Steps, LinkButton, FileTree } from '@astrojs/sta
 
 import CodeBasedMechanicalDesignComments from '../../../../components/code-based-mechanical-design/CodeBasedMechanicalDesignComments.astro';
 
-Automate enclosure design by parsing KiCad PCB files and generating print-ready housings with CadQuery. Your script will extract board outlines, mounting holes, and connector positions, then produce a complete enclosure with standoffs, port cutouts, ventilation, and snap-fit lids that updates whenever the PCB layout changes. #KiCad #EnclosureDesign #PCBAutomation
+A box drawn by hand around a circuit board is correct until the board changes. Move one connector by 2 mm and its opening is in the wrong place. In this lesson a script reads the outline, the mounting holes and the connector positions from a KiCad PCB (printed circuit board) file, then builds a printable shell and lid in CadQuery. You also size a snap-fit hook, and see why the hook as listed here does not yet hold the lid. #KiCad #EnclosureDesign #PCBAutomation
 
 ## Learning Objectives
 
@@ -36,7 +36,7 @@ By the end of this lesson, you will be able to:
 3. Place PCB standoffs at mounting hole locations with correct height and screw sizing
 4. Cut port openings for USB, HDMI, Ethernet, GPIO, and power connectors from component data
 5. Design ventilation patterns (slot arrays, hexagonal grids) for thermal management
-6. Implement snap-fit features for tool-free lid attachment
+6. Size a cantilever snap-fit from the strain the material allows, and say what a hook needs in order to latch
 7. Export a two-part enclosure (shell + lid) as STEP and STL files
 
 ## Understanding the KiCad PCB File Format
@@ -44,7 +44,7 @@ By the end of this lesson, you will be able to:
 <InArticleAd />
 
 
-KiCad stores PCB data as **S-expressions**, nested parenthesized lists similar to Lisp syntax. Every element in the file, from board outlines to component footprints, follows this structure.
+A KiCad board file is plain text. It is written as **S-expressions**: lists in parentheses, where the first word names the item and a list can hold other lists.
 
 ### S-Expression Structure
 
@@ -67,32 +67,20 @@ A `.kicad_pcb` file looks like this at the top level:
 )
 ```
 
-The key elements we need to extract are:
+A footprint is the pattern of pads for one component. The enclosure needs three things from the file:
 
-<CardGrid>
-  <Card title="Board Outline" icon="document">
-    Lines and arcs on the `Edge.Cuts` layer define the PCB boundary. These are `gr_line`, `gr_arc`, and `gr_circle` elements with `layer "Edge.Cuts"`.
-  </Card>
-
-  <Card title="Mounting Holes" icon="setting">
-    Footprints named `MountingHole*` contain pad elements with drill sizes. Their `(at x y)` fields give positions.
-  </Card>
-
-  <Card title="Connector Positions" icon="right-arrow">
-    Footprints for USB, HDMI, Ethernet, etc. contain `(at x y rotation)` and pad geometry that defines connector extents.
-  </Card>
-
-  <Card title="Component Heights" icon="up-caret">
-    3D model references within footprints (`model` elements) include Z-offsets and can indicate component heights for clearance.
-  </Card>
-</CardGrid>
+- **Board outline**: the `gr_line` items on the `Edge.Cuts` layer, which mark where the board is cut out.
+- **Mounting holes**: footprints named `MountingHole*`. Their `(at x y)` field gives the position, and the pad gives the drill size.
+- **Connectors**: footprints for USB, HDMI, Ethernet and others, with `(at x y rotation)`.
 
 ## Parsing KiCad PCB Files with Python
 
 <InArticleAd />
 
 
-We will build a lightweight S-expression parser rather than relying on external libraries. This keeps the tool self-contained and teaches the parsing fundamentals.
+The first tab turns the text into nested Python lists. The second collects the outline, the holes and the connectors from those lists. The third moves all coordinates so that one corner of the board is at (0, 0).
+
+Two limits: the outline reader uses straight lines only, so it is right for a rectangular board. And the file gives the position of a connector but not its size, so the sizes come from a table of typical values in the code.
 
 <Tabs>
   <TabItem label="S-Expression Parser">
@@ -407,7 +395,7 @@ def raspberry_pi_4_data() -> BoardData:
     """
     Return BoardData for a Raspberry Pi 4 Model B.
     Dimensions from official mechanical drawing.
-    Board: 85mm x 56mm, 1.4mm thick, mounting holes M2.7
+    Board: 85mm x 56mm, 1.4mm thick, 2.7mm mounting holes (for M2.5 screws)
     """
     return BoardData(
         outline_points=[
@@ -460,42 +448,47 @@ def raspberry_pi_4_data() -> BoardData:
 <InArticleAd />
 
 
-Before generating geometry, we define all enclosure parameters in one place. This makes the design fully parametric: any parameter change propagates through the entire model.
+A box exactly the size of the board does not work. A printed part comes out a few tenths of a millimeter larger or smaller than the model, so every part that must fit into another needs a gap, called a clearance. The walls must also suit the process that makes them.
 
 <CardGrid>
-  <Card title="Shell Parameters" icon="setting">
-    - **Wall thickness**: 2.0 mm (minimum for FDM strength)
-    - **Corner radius**: 3.0 mm (exterior, interior = exterior - wall)
-    - **Bottom thickness**: 2.0 mm
-    - **PCB clearance below**: 3.0 mm (for bottom components / standoffs)
-    - **PCB clearance above**: 15.0 mm (tallest component + margin)
+  <Card title="Shell" icon="setting">
+    - **Wall and bottom**: 2.0 mm, five passes of a 0.4 mm nozzle
+    - **Space below the PCB**: 3.0 mm, for solder joints
+    - **Space above the PCB**: 15.0 mm, for the tallest component
   </Card>
 
-  <Card title="Tolerance & Fit" icon="approve-check">
-    - **PCB tolerance**: 0.5 mm per side (thermal expansion + insertion clearance)
-    - **Connector tolerance**: 0.3 mm per side (looser for plug insertion)
-    - **Snap-fit interference**: 0.3 mm (for PLA/PETG at room temperature)
-    - **Lid gap**: 0.15 mm per side (for smooth sliding fit)
+  <Card title="Clearances" icon="approve-check">
+    - **Around the PCB**: 0.5 mm on each side. This covers printer error, not heat: an 85 mm board grows only about 0.05 mm when it warms by 40 °C.
+    - **Around a connector**: 0.3 mm on each side
+    - **Lid**: 0.15 mm on each side
   </Card>
 
-  <Card title="Standoff Dimensions" icon="up-caret">
-    - **Standoff diameter**: 6.0 mm (outer)
-    - **Standoff hole diameter**: 2.2 mm (for M2.5 self-tapping screw or heat-set insert)
-    - **Standoff height**: 3.0 mm (PCB clearance below)
-    - **Boss chamfer**: 0.5 mm (print quality improvement)
-  </Card>
-
-  <Card title="Ventilation" icon="star">
-    - **Slot width**: 1.5 mm
-    - **Slot length**: 12.0 mm
-    - **Slot spacing**: 3.0 mm (center-to-center)
-    - **Edge margin**: 5.0 mm (structural integrity around vents)
+  <Card title="Standoffs" icon="up-caret">
+    Short posts that hold the board off the floor: 6.0 mm in diameter and 3.0 mm high. The 2.2 mm hole suits an M2.5 self-tapping screw. A heat-set threaded insert needs a larger hole.
   </Card>
 </CardGrid>
 
+These values suit filament printing (FDM). A box for injection molding follows other rules: its walls lean by 1 to 2 degrees (draft) so that the part leaves the mold, and all walls have nearly the same thickness so that the plastic cools evenly.
+
+The height of the box is the sum of five layers, 23.6 mm:
+
+```text
++------------------------------+  23.6
+|          lid, 2.0            |
++------------------------------+  21.6
+|                              |
+|     space above, 15.0        |
+|                              |
+|  ======= PCB, 1.6 =========  |   6.6
+|   | |   standoffs, 3.0  | |  |   5.0
++------------------------------+   2.0
+|         bottom, 2.0          |
++------------------------------+   0 mm
+```
+
 ```python
 """
-Enclosure design parameters — single source of truth.
+Enclosure design parameters: single source of truth.
 All dimensions in millimeters.
 """
 
@@ -556,14 +549,21 @@ class EnclosureParams:
 <InArticleAd />
 
 
-Now we build the enclosure step by step. Each function handles one feature, and they compose together to produce the final shell and lid.
+Each tab adds one feature to the shell:
+
+- **Shell body**: a box with rounded corners, hollowed from the top. `add_shell_lip` removes the inner half of the wall over the top 2 mm, which leaves a step for the lid.
+- **Standoffs**: one post under each mounting hole. The origin of the box is at its center, so a board position $x$ becomes $x$ minus half the inner width, plus the clearance.
+- **Port cutouts**: one opening for each connector on a board edge.
+- **Ventilation** and **snap-fit**: slots or hexagonal holes, and the hook.
+
+Check two things in a 3D viewer after the export. First, each opening must be in the wall its connector faces. Second, the port cutouts start at the underside of the board, not at its top face, so each opening ends one board thickness too low: the USB-C opening covers heights 4.7 to 8.5 mm, and the connector sits from 6.4 to 9.6 mm. Add the board thickness to the connector heights before you print.
 
 <Tabs>
   <TabItem label="Shell Body">
 
 ```python
 """
-Generate the main enclosure shell — a hollow box with rounded corners.
+Generate the main enclosure shell: a hollow box with rounded corners.
 """
 
 import cadquery as cq
@@ -620,21 +620,25 @@ def add_shell_lip(shell: cq.Workplane, board: BoardData,
     int_w = params.interior_width(board)
     int_d = params.interior_depth(board)
 
-    lip_width = params.wall_thickness / 2 - params.lid_tolerance
+    # The inner half of the wall is removed near the top. The outer half
+    # stays as the lip, and the lid's own lip (inset by half the wall
+    # thickness plus lid_tolerance) drops into the step.
+    lip_width = params.wall_thickness / 2
     lip_height = 2.0  # mm, how tall the lip step is
 
-    # The lip sits at the top of the shell, inset from the outer wall
+    # The step starts lip_height below the top of the shell
     lip_offset = params.bottom_thickness + params.interior_height - lip_height
 
-    lip = (
+    step = (
         cq.Workplane("XY")
         .workplane(offset=lip_offset)
         .rect(int_w + lip_width * 2, int_d + lip_width * 2)
-        .rect(int_w, int_d)  # inner cutout
-        .extrude(lip_height)
+        .extrude(lip_height + 1)  # +1 to cut cleanly through the top
+        .edges("|Z")
+        .fillet(max(params.corner_radius - lip_width, 0.5))
     )
 
-    shell = shell.union(lip)
+    shell = shell.cut(step)
     return shell
 ```
 
@@ -836,7 +840,7 @@ def add_port_cutouts(shell: cq.Workplane, board: BoardData,
                 .extrude(wall_cut_depth, both=True)
             )
         else:
-            # Connector not on an edge — skip (internal component)
+            # Connector not on an edge: skip (internal component)
             continue
 
         shell = shell.cut(cutout)
@@ -1101,32 +1105,33 @@ def add_snap_hooks(shell: cq.Workplane, board: BoardData,
 
     # Place hooks on front and back walls (Y walls), centered
     for y_sign in [1, -1]:
-        wall_y = y_sign * int_d / 2
+        wall_y = y_sign * int_d / 2  # inner face of this wall
 
-        # Cantilever beam on interior wall face
+        # Cantilever beam on interior wall face:
+        # w wide (X), t thick (Y, into the interior), L tall (Z)
         beam = (
-            cq.Workplane("XZ")
-            .workplane(offset=wall_y - y_sign * t / 2)
-            .center(0, hook_z_start + L / 2)
-            .rect(w, L)
-            .extrude(t * y_sign * -1)  # into the interior
+            cq.Workplane("XY")
+            .box(w, t, L, centered=(True, True, False))
+            .translate((0, wall_y - y_sign * t / 2, hook_z_start))
         )
 
         # Hook catch at the bottom of the cantilever
-        # 45° ramp + vertical catch face
+        # 45° ramp + vertical catch face.
+        # The profile is drawn in the YZ plane, pointing into the
+        # interior, and extruded along X over the hook width.
+        y0 = wall_y - y_sign * t  # inner face of the beam
         hook_pts = [
-            (0, 0),
-            (hook_d, 0),
-            (hook_d, hook_h),
-            (0, hook_h + hook_d),  # 45° ramp
+            (y0, hook_z_start),
+            (y0 - y_sign * hook_d, hook_z_start),
+            (y0 - y_sign * hook_d, hook_z_start + hook_h),
+            (y0, hook_z_start + hook_h + hook_d),  # 45° ramp
         ]
 
         hook = (
-            cq.Workplane("XZ")
-            .workplane(offset=wall_y - y_sign * (t + hook_d / 2))
-            .center(-w / 2, hook_z_start)
+            cq.Workplane("YZ")
             .polyline(hook_pts).close()
             .extrude(w)
+            .translate((-w / 2, 0, 0))
         )
 
         shell = shell.union(beam).union(hook)
@@ -1167,12 +1172,36 @@ def add_snap_catches(lid: cq.Workplane, board: BoardData,
   </TabItem>
 </Tabs>
 
+### How a snap-fit works, and why this one does not latch
+
+A snap-fit hook is a thin beam fixed at one end (a cantilever) with a catch on its free end. During assembly a ramp on the catch pushes the beam aside. Past an edge on the other part, the beam springs back and the flat face of the catch holds behind that edge.
+
+The beam must bend by the depth of the catch without damage. The largest strain (stretch per unit length, with no unit) is at the fixed end:
+
+$$
+\varepsilon = \frac{3\,\delta\,t}{2\,L^2}
+$$
+
+Here $\delta$ is the deflection of the free end, $t$ the thickness of the beam and $L$ its length, all in mm. A longer or thinner beam is strained less. `calculate_snap_fit` solves this for the shortest safe beam. For $\delta = 1.5$ mm, $t = 1.0$ mm and the 2 percent that PLA allows, $L_{min} = \sqrt{3 \times 1.5 \times 1.0 / (2 \times 0.02)} = 10.6$ mm. The code uses 1.5 times this, 15.9 mm. That calculation is sound. The geometry built from it is not:
+
+:::caution[The snap-fit as listed does not hold the lid]
+The code builds solids without error, but the two parts never engage:
+
+- **The beam cannot bend.** It is joined to the inner face of the wall over its whole length. A cantilever must be free except at its fixed end.
+- **The catch is in the wrong place.** It is at the lower end of the beam, 5.7 to 9.2 mm above the outside bottom. The slot in the lid is more than 10 mm higher.
+- **The hook is in the way of the board.** It reaches 2.5 mm into the box at the height of the PCB.
+
+The lid is held only by its lip in the step, so it lifts off. Until the hook is redesigned, hold the lid with screws.
+:::
+
+A hook that latches needs a beam that hangs free from the lid with an air gap behind it, the catch on its free end, a ledge in the shell wall where the catch arrives when the lid is seated, and a position clear of the board and the ports.
+
 ## Lid Design
 
 <InArticleAd />
 
 
-The lid completes the enclosure. It includes alignment features to register with the shell lip and an optional GPIO slot for the Raspberry Pi header.
+The lid is a flat panel with a lip, a thin ring that drops 2 mm into the step of the shell, so the lid cannot slide sideways. A slot above the GPIO header (the 40-pin connector) lets a cable pass.
 
 ```python
 """
@@ -1285,7 +1314,7 @@ def add_lid_label(lid: cq.Workplane, text: str = "RPi4",
 <InArticleAd />
 
 
-Now we bring all the pieces together. This is the main script that generates the complete enclosure from Raspberry Pi 4 board data.
+The main script calls the functions in order and exports both parts. Look for the outside size, 90.0 × 61.0 mm: the 85 × 56 mm board plus 0.5 mm of clearance and a 2.0 mm wall on each side.
 
 ```python
 """
@@ -1337,6 +1366,9 @@ lid = make_lid(board, params)
 print("Cutting GPIO slot...")
 lid = add_gpio_slot_to_lid(lid, board, params)
 
+print("Cutting snap catch slots...")
+lid = add_snap_catches(lid, board, params)
+
 print("Engraving label...")
 lid = add_lid_label(lid, text="RPi 4B")
 
@@ -1362,28 +1394,17 @@ print(f"\nBoard: {board.width} x {board.height} mm")
 print(f"Mounting holes: {len(board.mounting_holes)}")
 print(f"Port cutouts: {len(board.connectors)}")
 print(f"\nFiles exported:")
-print(f"  rpi4_shell.step  — CNC/CAD interchange")
-print(f"  rpi4_lid.step    — CNC/CAD interchange")
-print(f"  rpi4_shell.stl   — 3D printing")
-print(f"  rpi4_lid.stl     — 3D printing")
+print(f"  rpi4_shell.step  : CNC/CAD interchange")
+print(f"  rpi4_lid.step    : CNC/CAD interchange")
+print(f"  rpi4_shell.stl   : 3D printing")
+print(f"  rpi4_lid.stl     : 3D printing")
 ```
 
 ### Expected Output
 
-```
-Building shell body...
-Adding shell lip...
-Adding PCB standoffs...
-Cutting port openings...
-Adding ventilation (hex pattern on bottom)...
-Adding side ventilation slots...
-Adding snap-fit hooks...
-Building lid...
-Cutting GPIO slot...
-Engraving label...
-Exporting STEP files...
-Exporting STL files (for 3D printing)...
+After the progress lines, the script prints:
 
+```
 Enclosure dimensions (exterior):
   Width:  90.0 mm
   Depth:  61.0 mm
@@ -1394,10 +1415,10 @@ Mounting holes: 4
 Port cutouts: 8
 
 Files exported:
-  rpi4_shell.step  — CNC/CAD interchange
-  rpi4_lid.step    — CNC/CAD interchange
-  rpi4_shell.stl   — 3D printing
-  rpi4_lid.stl     — 3D printing
+  rpi4_shell.step  : CNC/CAD interchange
+  rpi4_lid.step    : CNC/CAD interchange
+  rpi4_shell.stl   : 3D printing
+  rpi4_lid.stl     : 3D printing
 ```
 
 :::tip[Instrument it]
@@ -1409,31 +1430,18 @@ An enclosure is what lets an instrument live where the data is. Design it for th
 <InArticleAd />
 
 
-Enclosures are almost always 3D-printed during prototyping. Here are critical considerations for printability.
+A printer builds a part in layers from the bed upward and cannot print in the air. So the way a part lies on the bed decides whether it needs supports.
 
 <Tabs>
   <TabItem label="Print Orientation">
 
 ### Shell Orientation
 
-Print the shell **upside down** (open side facing up):
-
-- No support material needed for the cavity
-- Bottom face gets smooth bed adhesion surface
-- Ventilation holes print cleanly (no bridging for small hex holes)
-- Standoffs print as solid cylinders (strong)
+Print the shell with its bottom on the bed and the open side up. The cavity then needs no supports, and the standoffs grow straight up as solid posts. Only the top edge of each port opening must bridge a gap.
 
 ### Lid Orientation
 
-Print the lid **top face down**:
-
-- Flat, smooth top surface from bed contact
-- Alignment lip prints upward (no supports)
-- GPIO slot is a simple through-hole (clean print)
-
-:::tip[Layer Height]
-Use 0.2mm layer height for prototypes, 0.12mm for final parts. Snap-fit hooks benefit from thinner layers for smoother deflection surfaces.
-:::
+Print the lid with its top face on the bed. The top is then smooth, and the lip grows upward with no support.
 
   </TabItem>
   <TabItem label="Material Selection">
@@ -1447,39 +1455,34 @@ Use 0.2mm layer height for prototypes, 0.12mm for final parts. Snap-fit hooks be
 | **Impact strength** | Low | High | High |
 | **Snap-fit suitability** | Fair | Excellent | Good |
 | **UV resistance** | Poor | Good | Poor |
-| **Cost** | Low | Low | Low |
 
 :::caution[Temperature Warning]
-A Raspberry Pi 4 under load can reach 80-85°C at the SoC. PLA enclosures may soften near the CPU. Use PETG or ABS for production enclosures with thermally-stressed boards.
+The processor of a Raspberry Pi 4 can reach 80 to 85 °C under load, and a PLA box near it can soften. Use PETG or ABS for a box that stays in service.
 :::
-
-**Recommended:** PETG for enclosures. It balances printability, temperature resistance, and snap-fit flexibility.
 
   </TabItem>
   <TabItem label="Tolerance Tuning">
 
 ### Calibrating Tolerances for Your Printer
 
-Every FDM printer has slightly different dimensional accuracy. Run this test procedure before printing your final enclosure.
+Every printer is a little different, so measure yours before the final print.
 
 <Steps>
-1. **Print a tolerance test piece**: a block with slots of 0.1, 0.2, 0.3, 0.4, 0.5 mm clearance on each side of a reference PCB cutout
+1. **Print a test piece**: a block with pockets that are 0.1, 0.2, 0.3, 0.4 and 0.5 mm larger on each side than the PCB
 
-2. **Measure which clearance gives a snug sliding fit**: the PCB should drop in easily but not rattle
+2. **Find the smallest pocket** that the PCB drops into easily and does not rattle in
 
-3. **Update `pcb_tolerance` parameter** in `EnclosureParams` with your measured value
+3. **Set `pcb_tolerance`** in `EnclosureParams` to that value
 
-4. **Repeat for snap-fit interference**: print test hooks at 0.1, 0.2, 0.3, 0.4 mm interference and test which gives a satisfying click without requiring excessive force
-
-5. **Repeat for lid fit**: test `lid_tolerance` values for a smooth sliding engagement
+4. **Repeat for the lid**, and set `lid_tolerance`
 </Steps>
 
 ```python
 # After calibration, update parameters:
 params = EnclosureParams(
     pcb_tolerance=0.35,        # from step 2
-    snap_interference=0.25,    # from step 4
-    lid_tolerance=0.12,        # from step 5
+    snap_interference=0.25,    # not used by the code as listed
+    lid_tolerance=0.12,        # from step 4
     # ... other params unchanged
 )
 ```
@@ -1494,19 +1497,11 @@ params = EnclosureParams(
 
 <CardGrid>
   <Card title="Custom Boards" icon="document">
-    Replace `raspberry_pi_4_data()` with `parse_kicad_pcb("your_board.kicad_pcb")` to generate enclosures for any KiCad PCB. The parser extracts all geometry automatically.
+    Replace `raspberry_pi_4_data()` with `parse_kicad_pcb("your_board.kicad_pcb")` for a rectangular KiCad board of your own.
   </Card>
 
   <Card title="Screw Bosses" icon="setting">
-    Replace snap-fits with screw bosses by adding threaded inserts at the shell corners. Heat-set inserts (M2.5 or M3) provide the strongest joint for production enclosures.
-  </Card>
-
-  <Card title="Light Pipes" icon="star">
-    Add conical light pipes from LED positions on the PCB to the lid surface. Parse LED footprint positions from the PCB data and generate matching geometry.
-  </Card>
-
-  <Card title="EMI Shielding" icon="approve-check">
-    For RF applications, add a conductive gasket groove around the lid perimeter. The groove geometry is a simple rectangular channel milled into the shell lip face.
+    Add a post with a hole at each corner of the shell and a matching hole in the lid. A screw into a heat-set insert (M2.5 or M3) is the strongest way to hold a lid.
   </Card>
 </CardGrid>
 
@@ -1517,16 +1512,12 @@ params = EnclosureParams(
 
 **In this lesson, you:**
 
-- Parsed KiCad `.kicad_pcb` S-expression files to extract board outlines, mounting holes, and connector positions using a custom Python parser
-- Generated parametric enclosure shells with controlled wall thickness, corner radii, and tolerances in CadQuery
-- Placed PCB standoffs at precise mounting hole locations with chamfers and gussets for rigidity
-- Cut port openings for USB-C, micro-HDMI, USB-A, Ethernet, audio, and GPIO connectors
-- Designed both slot-array and hexagonal ventilation patterns for thermal management
-- Implemented cantilever snap-fit hooks with engineering calculations for beam length and allowable strain
-- Built a complete two-part enclosure (shell + lid) and exported it as STEP and STL files
-- Applied 3D printing design guidelines including orientation, material selection, and tolerance calibration
+- Read the outline, mounting holes and connectors from a KiCad `.kicad_pcb` file with your own parser
+- Chose wall thickness and clearances for a printed part
+- Generated a shell with standoffs, port openings and ventilation, and a lid with a lip
+- Sized a cantilever snap-fit from the allowable strain, and learned what a hook needs in order to latch
 
-**Next up:** [Heat Sink Design & Thermal Optimization](./heat-sink-design-thermal-optimization). Model thermal resistance from junction to ambient, compare fin geometries, and optimize heat sink designs with parameter sweeps.
+**Next up:** [Heat Sink Design & Thermal Optimization](/education/code-based-mechanical-design/heat-sink-design-thermal-optimization/) follows the heat from a chip to the air.
 
 <CodeBasedMechanicalDesignComments />
 

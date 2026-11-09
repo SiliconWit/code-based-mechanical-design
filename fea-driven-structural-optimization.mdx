@@ -25,7 +25,7 @@ import { Card, CardGrid, Badge, Steps, LinkButton, FileTree } from '@astrojs/sta
 
 import CodeBasedMechanicalDesignComments from '../../../../components/code-based-mechanical-design/CodeBasedMechanicalDesignComments.astro';
 
-Optimizing a mechanical part by hand means changing a dimension in CAD, re-meshing in the FEA tool, running the solver, recording the result, and repeating. With three parameters and five values each, that is 125 iterations, each taking several minutes of manual work. Most engineers give up after a dozen and pick "good enough." An automated pipeline eliminates the tedium: CadQuery generates geometry, FreeCAD FEM meshes and solves with CalculiX, and Python sweeps the entire parameter space overnight. In this capstone you will build that pipeline and produce a Pareto front of mass versus stress that shows every optimal tradeoff at a glance. #FEA #StructuralOptimization #Capstone
+A bracket that is too thin cracks at its corner. A bracket that is too thick wastes metal on every unit made. Finding the size between the two by hand means changing a dimension, running a stress analysis, writing down the result and starting again. With three dimensions and five values each, that is 125 runs, and most people stop after a dozen and accept the first design that holds. In this capstone a script does the 125 runs. CadQuery, a Python library that makes solid models from code, builds each bracket. Finite element analysis (FEA), which finds the stress in a part by cutting it into thousands of small pieces, checks each one. You then choose from a chart of mass against stress. #FEA #StructuralOptimization #Capstone
 
 ## Learning Objectives
 
@@ -42,7 +42,7 @@ By the end of this lesson, you will be able to:
 <InArticleAd />
 
 
-The core idea is a closed-loop pipeline where geometry generation, simulation, and result extraction are all automated:
+Three free programs work in a chain, and a Python script passes the files between them. FreeCAD is a CAD program whose FEM workbench prepares an analysis. CalculiX is the solver that computes the stresses. STEP is the file format that carries exact geometry from one program to the next.
 
 ```mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
@@ -57,60 +57,66 @@ flowchart TD
 ```
 
 <Steps>
-1. **CadQuery generates geometry**: a parametric bracket with design variables (wall thickness $t$, rib count $n_r$, fillet radius $r_f$)
+1. **CadQuery generates geometry**: one bracket from three design variables (wall thickness $t$, rib count $n_r$, fillet radius $r_f$)
 
-2. **Export to STEP**: CadQuery writes a STEP file that preserves exact geometry for FEM import
+2. **Export to STEP**: the exact geometry is written to a file
 
-3. **FreeCAD FEM imports and meshes**: Python scripting in FreeCAD creates the FEM analysis: mesh, materials, constraints, loads
+3. **FreeCAD FEM imports and meshes**: a script adds the mesh, the material, the supports and the load
 
-4. **CalculiX solves**: the open-source FEA solver computes displacements, stresses, and reaction forces
+4. **CalculiX solves**: it computes displacements and stresses
 
-5. **Python extracts results**: read the `.frd` output file to get maximum von Mises stress and compute mass from volume
+5. **Python extracts results**: the highest stress from the results, and the mass from the volume
 
-6. **Record and repeat**: store (parameters, mass, stress) for each configuration, then move to the next parameter combination
+6. **Record and repeat**: store parameters, mass and stress, then take the next combination
 
-7. **Pareto front analysis**: plot mass vs. stress for all configurations and identify the non-dominated (optimal) designs
+7. **Pareto front analysis**: plot mass against stress for all designs and keep the best trade-offs
 </Steps>
 
 <Card title="The Driver Loop" icon="setting">
-For each combination of wall thickness, rib count, and fillet radius:
-1. **CadQuery** generates the bracket and exports a STEP file
-2. **FreeCAD FEM** imports the STEP, meshes it, applies loads, and solves with **CalculiX**
-3. **Python** reads the results file to extract mass and maximum von Mises stress
-4. Results are stored in a table for post-processing
-
-After all configurations are evaluated, **matplotlib** plots the Pareto front and highlights the optimal design.
+Steps 1 to 6 repeat for each of the 125 combinations of wall thickness, rib count and fillet radius. Step 7 runs once at the end.
 </Card>
 
 ## Parametric Bracket Design in CadQuery
 
 <InArticleAd />
 
+The part is an L-bracket, the angle piece that holds a motor, a sensor or a shelf to a surface.
 
-The design subject is an **L-bracket**, a common structural element used for mounting motors, sensors, and structural connections. The bracket has:
+```text
+     side view                     ┌───┐
+                                   │   │  web (vertical plate)
+           load hole  ──────────►  │ o │
+                                   │   │
+                                 ╱ │   │
+           rib (triangle) ►    ╱   │   │
+                             ╱     │   │
+   ┌───────────────────────╱───────┘   │  a fillet rounds
+   │   base plate, bolted down         │  this inside corner
+   └───────────────────────────────────┘
+```
 
-- A horizontal base plate with mounting holes (bolted to a surface)
-- A vertical web plate (carries the load)
-- Optional stiffening ribs connecting the base to the web
-- Fillet radii at the base-web junction (stress reduction)
+- The base plate is bolted to a surface through four holes.
+- The web carries the load at a hole near its top.
+- A rib is a thin triangular wall that braces the corner, as a diagonal strut braces a shelf.
+- A fillet is a rounded inside corner. A sharp inside corner concentrates stress and a rounded one spreads it.
 
 ### Design Parameters
 
 <CardGrid>
   <Card title="Wall Thickness (t)" icon="setting">
-    **Range: 2-6 mm.** Controls the thickness of both the base plate and the vertical web. Primary driver of both mass and stiffness.
+    **Range: 2-6 mm.** The thickness of base and web. It moves mass and stress more than anything else.
   </Card>
 
   <Card title="Rib Count (n_r)" icon="setting">
-    **Range: 0-4 ribs.** Triangular stiffening ribs connecting the base to the web. Each rib adds mass but significantly reduces stress at the junction.
+    **Range: 0-4 ribs.** Each rib adds a little mass and braces the corner.
   </Card>
 
   <Card title="Fillet Radius (r_f)" icon="setting">
-    **Range: 1-8 mm.** Radius at the base-web junction. Larger fillets reduce stress concentration but add mass and may interfere with mounting.
+    **Range: 1-8 mm.** A larger radius lowers the stress in the corner, but it can get in the way of what is mounted there.
   </Card>
 
   <Card title="Fixed Parameters" icon="approve-check">
-    **Base: 60x40 mm, Web height: 50 mm, Material: Aluminum 6061-T6.** These remain constant across all configurations to keep the parameter sweep manageable.
+    **Base: 60x40 mm, Web height: 50 mm, Material: Aluminum 6061-T6.** These stay the same in every design.
   </Card>
 </CardGrid>
 
@@ -209,29 +215,17 @@ def parametric_bracket(
         rib_depth = base_depth * 0.6   # Ribs extend 60% of base depth
 
         for x_pos in rib_positions:
-            # Triangular rib profile
-            rib = (
-                cq.Workplane("XY")
-                .transformed(offset=(
-                    x_pos, base_depth/2 - t, t
-                ))
-                .moveTo(0, 0)
-                .lineTo(-rib_depth, 0)
-                .lineTo(0, rib_height)
-                .close()
-                .extrude(rib_thickness)
-                .translate((0, 0, 0))
-            )
-
-            # Center the rib extrusion on the x_pos
-            rib = rib.translate((-rib_thickness/2, 0, 0))
-            # Swap: extrude along X, so use workplane "YZ"
+            # Triangular rib profile, drawn on the "YZ" workplane and
+            # extruded along X. On this workplane the local axes are
+            # (Y, Z, X), so the offset is given in that order: the corner
+            # of the triangle sits where the web meets the base, and the
+            # rib is centered on x_pos.
             rib = (
                 cq.Workplane("YZ")
                 .transformed(offset=(
-                    x_pos - rib_thickness/2,
                     base_depth/2 - t,
-                    t
+                    t,
+                    x_pos - rib_thickness/2
                 ))
                 .moveTo(0, 0)
                 .lineTo(-rib_depth, 0)
@@ -277,7 +271,7 @@ def parametric_bracket(
         bracket
         .faces(">Y")
         .workplane()
-        .pushPoints([(0, load_hole_z - t - web_height/2)])
+        .pushPoints([(0, load_hole_z)])  # workplane origin is at Z = 0
         .hole(hole_diameter, t)
     )
 
@@ -362,12 +356,39 @@ parameter_space = generate_parameter_space()
   </TabItem>
 </Tabs>
 
+## A hand estimate before the solver
+
+A solver always prints a number. Whether it means anything depends on the load, the supports and the mesh you gave it. So estimate the stress by hand first, and when the solver disagrees by a factor of three, find out why.
+
+Take a force $F$ that pushes sideways on the web, at a height $a$ above the base. The web bends like a diving board fixed at its root, and the bending stress there is:
+
+$$
+\sigma = \frac{6 F a}{b t^2}
+$$
+
+where $\sigma$ is the stress (MPa), $F$ the force (N), $a$ the height of the load above the base (mm), $b$ the width of the web (mm) and $t$ its thickness (mm). For this bracket $F = 500$ N, $a = 0.75 \times 50 = 37.5$ mm and $b = 60$ mm. With $t = 4$ mm:
+
+$$
+\sigma = \frac{6 \times 500 \times 37.5}{60 \times 4^2} = 117 \text{ MPa}
+$$
+
+The stress falls with the square of the thickness, while the mass grows only in proportion to it, about 14 g for each millimetre. That is the trade-off the sweep explores. The formula has no ribs, no fillet and no holes, and those are what the solver adds.
+
+Direction matters. The scripts below apply the force along Z, in the plane of the web. That presses the web straight down onto the fixed base and nothing bends: the stress is near $F / (b t) = 2$ MPa, with a local peak at the load hole, and every design passes. To study bending, the case of the estimate above and of the sensitivity table later, apply the force along Y.
+
+Three results a solver cannot be trusted for:
+
+- The peak at a sharp inside corner. It keeps rising as the mesh gets finer and never settles. Give the corner a fillet.
+- Anything above the yield strength, here 276 MPa. This analysis is linear: it assumes the metal springs back fully.
+- The stress next to a support. The scripts fix the whole bottom face, which is stiffer than four real bolts.
+
 ## FreeCAD FEM Python API
 
 <InArticleAd />
 
+To set up an analysis you give the solver four things: a mesh (the part cut into small elements, here pyramids with four corners), a material, the supports, called boundary conditions, and the loads. The solver returns the displacement and the stress at every corner point (node) of the mesh. The stress is reported as the von Mises stress, one number that combines stresses in all directions so that it can be compared with the yield strength.
 
-FreeCAD's FEM workbench can be fully controlled through Python. The key objects are:
+FreeCAD's FEM workbench can be driven from Python. The key objects are:
 
 | FreeCAD Object | Purpose |
 |---------------|---------|
@@ -490,14 +511,20 @@ def setup_fem_analysis(
         com = face.CenterOfMass
         # Load hole is at ~75% web height, on the far Y face
         if com.z > 30 and abs(com.y) > 15:
-            if face.Surface.TypeId == "Part::GeomCylinder":
+            # Radius 3.25 mm = the 6.5 mm load hole (this skips fillets)
+            if (face.Surface.TypeId == "Part::GeomCylinder" and
+                    abs(face.Surface.Radius - 3.25) < 0.01):
                 load_faces.append(("Face" + str(i + 1), face))
 
     if load_faces:
         force.References = [
             (shape_obj, load_faces[0][0])
         ]
-    force.Direction = (shape_obj, "Face1")  # Will be corrected
+    # Direction: along the normal of the flat bottom face (the Z axis).
+    # Check the arrow in the FreeCAD GUI and switch Reversed if it
+    # does not point downward (-Z).
+    if bottom_faces:
+        force.Direction = (shape_obj, [bottom_faces[0][0]])
     force.Reversed = False
     analysis.addObject(force)
 
@@ -580,16 +607,24 @@ def extract_frd_results(frd_path: str) -> dict:
     in_disp_block = False
 
     for i, line in enumerate(lines):
+        # Each result block starts with a " -4" line that names it,
+        # for example " -4  STRESS      6    1"
         # Detect stress results block
-        if "STRESS" in line and "100CL" in line:
+        if line.startswith(" -4") and "STRESS" in line:
             in_stress_block = True
             in_disp_block = False
             continue
 
         # Detect displacement block
-        if "DISP" in line and "100CL" in line:
+        if line.startswith(" -4") and "DISP" in line:
             in_disp_block = True
             in_stress_block = False
+            continue
+
+        # Any other block (strain, forces, ...) ends the current one
+        if line.startswith(" -4"):
+            in_stress_block = False
+            in_disp_block = False
             continue
 
         # End of block
@@ -599,17 +634,21 @@ def extract_frd_results(frd_path: str) -> dict:
             continue
 
         # Parse stress data (nodal von Mises)
+        # The .frd file uses fixed-width columns: 3 characters for the
+        # record key, 10 for the node number, then 12 for each value.
+        # Negative values touch the value before them, so split() on
+        # spaces would lose those lines.
         if in_stress_block and line.startswith(" -1"):
-            parts = line.split()
-            if len(parts) >= 7:
+            parts = [line[13 + 12 * k: 25 + 12 * k] for k in range(6)]
+            if all(p.strip() for p in parts):
                 try:
-                    # Columns: node, sxx, syy, szz, sxy, syz, sxz
-                    sxx = float(parts[1])
-                    syy = float(parts[2])
-                    szz = float(parts[3])
-                    sxy = float(parts[4])
-                    syz = float(parts[5])
-                    sxz = float(parts[6])
+                    # Columns: sxx, syy, szz, sxy, syz, szx
+                    sxx = float(parts[0])
+                    syy = float(parts[1])
+                    szz = float(parts[2])
+                    sxy = float(parts[3])
+                    syz = float(parts[4])
+                    sxz = float(parts[5])
 
                     # Von Mises stress calculation
                     vm = np.sqrt(0.5 * (
@@ -624,12 +663,12 @@ def extract_frd_results(frd_path: str) -> dict:
 
         # Parse displacement data
         if in_disp_block and line.startswith(" -1"):
-            parts = line.split()
-            if len(parts) >= 4:
+            parts = [line[13 + 12 * k: 25 + 12 * k] for k in range(3)]
+            if all(p.strip() for p in parts):
                 try:
-                    dx = float(parts[1])
-                    dy = float(parts[2])
-                    dz = float(parts[3])
+                    dx = float(parts[0])
+                    dy = float(parts[1])
+                    dz = float(parts[2])
                     disp = np.sqrt(dx**2 + dy**2 + dz**2)
                     displacements.append(disp)
                 except (ValueError, IndexError):
@@ -669,12 +708,8 @@ def extract_freecad_results(doc) -> dict:
         return {"error": "No result object found"}
 
     von_mises = np.array(result_obj.vonMises)
-    disp_x = np.array(result_obj.DisplacementVectors)
-
-    # Compute displacement magnitudes
-    displacements = np.sqrt(
-        disp_x[0::3]**2 + disp_x[1::3]**2 + disp_x[2::3]**2
-    )
+    # Displacement magnitude at each node (one value per node)
+    displacements = np.array(result_obj.DisplacementLengths)
 
     return {
         "max_von_mises_MPa": float(np.max(von_mises)),
@@ -723,7 +758,7 @@ print(f"Maximum deflection: {DESIGN_CONSTRAINTS['max_displacement_mm']} mm")
 <InArticleAd />
 
 
-The driver script ties everything together: it iterates through the parameter space, generates geometry, runs FEM analysis, and collects results.
+The driver script runs the whole chain once for each design. For each one it builds the bracket and computes its mass, writes a small FreeCAD script, starts FreeCAD as a separate program to mesh and solve, and reads the highest von Mises stress from a results file. A run that fails or takes more than five minutes is recorded and skipped, so one bad shape does not stop the sweep.
 
 ```python
 """
@@ -843,7 +878,8 @@ try:
     fixed = ObjectsFem.makeConstraintFixed(doc, "Fixed")
     for i, face in enumerate(shape.Shape.Faces):
         if abs(face.CenterOfMass.z) < 0.1:
-            fixed.References = [(shape, "Face" + str(i+1))]
+            bottom_face = "Face" + str(i+1)
+            fixed.References = [(shape, bottom_face)]
             break
     analysis.addObject(fixed)
 
@@ -854,9 +890,12 @@ try:
         com = face.CenterOfMass
         if (com.z > 30 and
             hasattr(face.Surface, 'TypeId') and
-            'Cylinder' in str(face.Surface)):
+            'Cylinder' in str(face.Surface) and
+            abs(face.Surface.Radius - 3.25) < 0.01):
             force.References = [(shape, "Face" + str(i+1))]
             break
+    # Force along the normal of the bottom face (the Z axis)
+    force.Direction = (shape, [bottom_face])
     analysis.addObject(force)
 
     # Solver
@@ -994,7 +1033,7 @@ def run_optimization():
         status = result.get("status", "unknown")
         if status == "success":
             sigma = result["max_von_mises_MPa"]
-            print(f"OK ({elapsed:.1f}s) — "
+            print(f"OK ({elapsed:.1f}s): "
                   f"mass={result['mass_g']:.1f}g, "
                   f"σ_max={sigma:.1f} MPa")
         else:
@@ -1015,7 +1054,7 @@ def run_optimization():
 ```
 
 :::tip[Practical Runtime]
-A 125-configuration sweep with 2mm mesh size takes approximately 2-4 hours on a modern laptop (each analysis takes 1-2 minutes). For faster iteration during development, reduce the parameter space to 3 values per dimension (27 configurations, ~30 minutes) or increase the mesh size to 3-4 mm.
+With a 2 mm mesh each analysis takes 1 to 2 minutes on a laptop, so 125 designs take 2 to 4 hours. While you develop the scripts, use 3 values per dimension (27 designs, about 30 minutes) or a mesh of 3 to 4 mm.
 :::
 
 ## Pareto Front Analysis
@@ -1023,19 +1062,19 @@ A 125-configuration sweep with 2mm mesh size takes approximately 2-4 hours on a 
 <InArticleAd />
 
 
-The Pareto front identifies the **non-dominated** designs, configurations where no other design is simultaneously lighter AND lower stress. Any improvement in one objective requires a sacrifice in the other.
+The sweep gives 125 designs, each with a mass and a stress. We want both low, and they pull against each other. Most of the 125 can be thrown away without any judgment: if another design is lighter and also less stressed, nobody would choose the worse one. The designs that survive this test form the Pareto front. Along the front, less mass always costs more stress.
 
 ### Pareto Optimality
 
-A design $A$ **dominates** design $B$ if:
-- $A$ has less mass than $B$, AND
-- $A$ has less (or equal) maximum stress than $B$
-
-A design is **Pareto-optimal** if no other design in the set dominates it. The collection of all Pareto-optimal designs forms the **Pareto front**.
+A design $A$ dominates a design $B$ when $A$ is lighter than $B$ and its highest stress is no greater:
 
 $$
 \text{Design } A \succ B \iff m_A < m_B \text{ and } \sigma_A \leq \sigma_B
 $$
+
+where $m$ is the mass (g) and $\sigma$ the highest von Mises stress (MPa). A design is Pareto-optimal when no other design dominates it.
+
+The code finds the front by comparing every pair. `select_best_design` then keeps the front designs under the stress limit of 138 MPa and returns the lightest. It does not check the 0.5 mm deflection limit.
 
 <Tabs>
   <TabItem label="Pareto Computation">
@@ -1310,23 +1349,23 @@ def results_summary_table(
 <InArticleAd />
 
 
-The Pareto front reveals fundamental engineering trade-offs:
+The plot has mass on the horizontal axis and stress on the vertical axis. Read it in five steps:
 
 <Steps>
-1. **Light designs with high stress** (left side of the Pareto front): thin walls, no ribs, small fillets. These are mass-optimal but may not meet strength requirements.
+1. **Left end of the front**: light designs with high stress. Thin walls, no ribs, small fillets.
 
-2. **Heavy designs with low stress** (right side of the Pareto front): thick walls, many ribs, large fillets. These are over-designed and wasteful.
+2. **Right end of the front**: heavy designs with low stress. Thick walls, many ribs, large fillets.
 
-3. **The "knee" of the Pareto front**: the region of diminishing returns where adding more mass yields progressively less stress reduction. The best designs are often near this knee.
+3. **The knee**: the bend in the front, where each added gram starts to buy much less stress. Good designs are often near it.
 
-4. **Infeasible designs**: configurations above the stress constraint line fail the strength requirement regardless of mass. These are eliminated from consideration.
+4. **Above the limit line**: designs that fail the strength check, whatever their mass.
 
-5. **Dominated designs**: configurations that are neither on the Pareto front nor infeasible. Another design exists that is both lighter and stronger.
+5. **Below the line but off the front**: dominated designs. Another design is both lighter and less stressed.
 </Steps>
 
 ### Design Sensitivity Insights
 
-The parameter sweep also reveals which design variables have the strongest influence:
+The sweep also shows which dimension matters most. The function below draws, for each value of each parameter, a box plot: a box that spans the middle half of the results, with a line at the median.
 
 ```python
 import matplotlib.pyplot as plt
@@ -1388,7 +1427,7 @@ def sensitivity_analysis(results: List[Dict]):
 # sensitivity_analysis(all_results)
 ```
 
-Typical findings for the L-bracket problem:
+What to expect for an L-bracket whose web is bent by the load. These are trends from the mechanics, not printed results of a run:
 
 | Parameter | Effect on Stress | Effect on Mass | Sensitivity |
 |-----------|-----------------|----------------|-------------|
@@ -1397,7 +1436,7 @@ Typical findings for the L-bracket problem:
 | Fillet radius $r_f$ | Moderate reduction (stress concentration relief) | Negligible increase | **Medium** (stress only) |
 
 :::note[Key Insight]
-Wall thickness dominates both objectives, making it the primary design lever. Fillet radius is almost "free" because it reduces stress with negligible mass penalty. Ribs provide moderate stress reduction at moderate mass cost. The optimal strategy is usually: maximize fillet radius first, add 1-2 ribs, then find the minimum wall thickness that meets the stress constraint.
+Wall thickness moves both mass and stress most. A fillet is almost free: it lowers the stress and adds very little mass. Ribs lower the stress at a moderate cost in mass. A usual order of work: make the fillet as large as fits, add one or two ribs, then find the thinnest wall that meets the stress limit.
 :::
 
 ## Complete Capstone Workflow
@@ -1405,7 +1444,7 @@ Wall thickness dominates both objectives, making it the primary design lever. Fi
 <InArticleAd />
 
 
-Here is the end-to-end sequence you would run to complete this capstone project:
+The whole sequence, in order:
 
 <Steps>
 1. **Set up the environment**
@@ -1532,31 +1571,31 @@ def export_final_design(
 <InArticleAd />
 
 
-This capstone brings together every technique from the course:
+The capstone reuses one idea from each earlier lesson:
 
 <CardGrid>
-  <Card title="Lesson 1: Hardware Library" icon="setting">
-    **Standards-driven parametric design.** You built reusable functions that generate geometry from lookup tables and equations, the same pattern used for the bracket's parametric dimensions.
+  <Card title="Hardware library" icon="setting">
+    Functions that build geometry from tables and equations. The bracket function is one of them.
   </Card>
 
-  <Card title="Lesson 2: Involute Gears" icon="setting">
-    **Mathematical curve generation.** The involute tooth profile, contact ratio, and Lewis stress equations demonstrated how engineering math becomes CadQuery geometry, the same approach used for helix generation in springs and implicit surfaces in lattices.
+  <Card title="Involute gears" icon="setting">
+    Engineering mathematics turned into geometry, with a stress formula as the check.
   </Card>
 
-  <Card title="Lesson 3: PCB Enclosures" icon="setting">
-    **Data-driven geometry.** Parsing external data (KiCad PCB files) to auto-generate geometry taught the pattern of reading inputs and producing parametric output, the same pattern the optimization loop uses when reading FEA results.
+  <Card title="PCB enclosures" icon="setting">
+    Geometry driven by data read from a file. Here the loop reads solver results the same way.
   </Card>
 
-  <Card title="Lesson 4: Heat Sinks" icon="setting">
-    **Parameter sweeps and visualization.** Sweeping fin count, height, and spacing while plotting thermal resistance maps established the optimization workflow that this capstone extends to full FEA-in-the-loop.
+  <Card title="Heat sinks" icon="setting">
+    A sweep over a grid of designs, then a choice within limits. This lesson adds a solver inside the sweep.
   </Card>
 
-  <Card title="Lesson 5: Lattice Structures" icon="setting">
-    **Advanced geometry generation.** TPMS implicit surfaces and voxel-based modeling showed that CadQuery + NumPy can handle geometry far beyond traditional CAD, the same computational approach that makes large parameter sweeps feasible.
+  <Card title="Lattice structures" icon="setting">
+    Shapes computed with NumPy, beyond what is practical to draw by hand.
   </Card>
 
-  <Card title="Lesson 6: Spring Design" icon="setting">
-    **Stress verification.** Wahl correction, Goodman fatigue analysis, and material selection from standards demonstrated rigorous engineering verification, the same mindset applied to FEA-based stress checking in this capstone.
+  <Card title="Spring design" icon="setting">
+    A stress check against a limit with a safety factor, done before the part is made.
   </Card>
 </CardGrid>
 
@@ -1566,31 +1605,29 @@ This capstone brings together every technique from the course:
 
 
 <CardGrid>
-  <Card title="Automation is the Point" icon="rocket">
-    The manual version of this workflow (model a bracket in GUI CAD, import to FEM, set up analysis, run, record stress, repeat 125 times) would take weeks. The automated version runs overnight.
+  <Card title="The script does the repetition" icon="rocket">
+    125 runs by hand take weeks. The loop finishes them in a few hours with nobody at the keyboard.
   </Card>
 
-  <Card title="Pareto > Single Optimum" icon="approve-check">
-    Real engineering rarely has one "best" answer. The Pareto front shows the full trade-off landscape, letting you make informed decisions based on which constraint matters most for your application.
+  <Card title="A front, not one answer" icon="approve-check">
+    The Pareto front shows what each gram buys in stress. The limit then picks the design.
   </Card>
 
-  <Card title="Code = Reproducibility" icon="setting">
-    Every aspect of this optimization (geometry, loads, constraints, solver settings, post-processing) is captured in version-controlled Python scripts. Anyone can reproduce, verify, and extend the results.
+  <Card title="The design is in the scripts" icon="setting">
+    Geometry, loads, supports and solver settings are all text, so anyone can run the study again and check it.
   </Card>
 
-  <Card title="Start Simple, Then Automate" icon="warning">
-    Always verify the FEM setup manually on one configuration before automating. A bug in the load application that runs silently through 125 configurations wastes hours and produces meaningless results.
+  <Card title="Check one run by hand first" icon="warning">
+    A wrong load direction runs silently through all 125 designs. Compare one result with a hand estimate before you start the sweep.
   </Card>
 </CardGrid>
 
 :::tip[Next Steps]
-This capstone used a structured parameter sweep (full factorial grid). For higher-dimensional problems (5+ design variables), a full factorial grid becomes computationally prohibitive. Consider these advanced approaches:
-- **Latin Hypercube Sampling**: efficiently sample high-dimensional spaces
-- **Bayesian Optimization** (e.g., with `scikit-optimize`): surrogate model guides the search to promising regions
-- **Genetic Algorithms** (e.g., with `pymoo`): evolve a population of designs toward the Pareto front
-- **Topology Optimization**: let the solver decide where to place material, then interpret the result as a parametric design
-
-These techniques build naturally on the automated pipeline you implemented here.
+A full grid stops being practical above about five design variables: five values each already give 3,125 runs. Methods that need fewer runs:
+- Latin hypercube sampling spreads a small number of designs evenly through the space.
+- Bayesian optimization (for example with `scikit-optimize`) fits a simple model to the results so far and uses it to pick the next design.
+- Genetic algorithms (for example with `pymoo`) breed new designs from the best ones.
+- Topology optimization lets the solver decide where material is needed.
 :::
 
 <CodeBasedMechanicalDesignComments />

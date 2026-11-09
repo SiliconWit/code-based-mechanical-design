@@ -25,7 +25,7 @@ import { Card, CardGrid, Badge, Steps, LinkButton, FileTree } from '@astrojs/sta
 
 import CodeBasedMechanicalDesignComments from '../../../../components/code-based-mechanical-design/CodeBasedMechanicalDesignComments.astro';
 
-A chip rated for 125 degrees C junction temperature will throttle, glitch, or fail permanently if the heat sink cannot dissipate its power budget. Picking a heat sink from a catalog is a gamble unless you understand the full thermal resistance chain from junction to ambient, and the right fin geometry depends on airflow, orientation, and available space in ways that are not obvious from a datasheet alone. In this lesson you will model that resistance chain from first principles, compare straight-fin, pin-fin, and radial fin geometries in CadQuery, and sweep parameters with Python to build thermal performance maps that show exactly which configuration keeps your chip cool. #ThermalDesign #HeatSink #CadQuery
+A voltage regulator that works on the bench can shut down, or fail for good, on the first hot day inside a closed box. The part did not change. The heat it makes could not leave fast enough, and its temperature climbed past the limit. A heat sink is the usual cure, but a larger one with more fins is not always a cooler one. In this lesson you calculate how much cooling a part needs, model how fins pass heat to still air, and let Python search for the fin count and fin size that keep the part coolest. Then you build that heat sink in CadQuery, a Python library that makes solid models from code. #ThermalDesign #HeatSink #CadQuery
 
 ## Learning Objectives
 
@@ -43,73 +43,65 @@ By the end of this lesson, you will be able to:
 
 <InArticleAd />
 
+The heat starts at the junction, the small active region of silicon inside the part. To reach the air it must cross the package, then the joint between package and heat sink, then the heat sink surface. Each of these holds the heat back a little. Thermal resistance measures how much: it is the temperature difference needed to push one watt of heat through, in °C/W.
 
 ```text
-  Thermal Resistance Chain (Junction to Ambient)
-  ──────────────────────────────────────────
-  Tj (junction)
+  Tj (junction, the hottest point)
     │
-    ├── Rjc (junction to case)     0.5-3.0 C/W
-    │   Package type, die attach
+    ├── Rjc (junction to case)     0.5-3.0 °C/W
+    │   set by the package
     │
-    ├── Rcs (case to sink)         0.1-2.0 C/W
-    │   Thermal paste or pad
+    ├── Rcs (case to sink)         0.1-2.0 °C/W
+    │   thermal paste or pad
     │
-    ├── Rsa (sink to ambient)      ← We design this
-    │   Fin geometry, airflow
+    ├── Rsa (sink to ambient)      ← we design this
+    │   fin geometry, airflow
     │
     ▼
-  Ta (ambient air)
-
-  Tj = Ta + Q × (Rjc + Rcs + Rsa)
-
-  Analogy: series electrical circuit
-  Q (watts) = I (amps)
-  dT (degrees) = V (volts)
-  R_thermal = R_electrical
+  Ta (ambient, the surrounding air)
 ```
 
-Heat flows from the semiconductor junction through a series of thermal resistances to the surrounding air. Each resistance is analogous to an electrical resistor in a series circuit.
+The chain behaves like resistors in series in an electric circuit: heat flow in watts plays the part of current, and temperature difference plays the part of voltage. The comparison holds for steady heat flow. It says nothing about how long the parts take to warm up.
 
 ### The Thermal Resistance Chain
 
-The total thermal resistance from junction to ambient is:
+Resistances in series add, so the total from junction to ambient is:
 
 $$R_{\theta,total} = R_{\theta,jc} + R_{\theta,cs} + R_{\theta,sa}$$
 
-where:
+where all three are in °C/W:
 
-- $R_{\theta,jc}$ = junction-to-case resistance (internal to the chip package, from datasheet)
-- $R_{\theta,cs}$ = case-to-sink resistance (thermal interface material)
-- $R_{\theta,sa}$ = sink-to-ambient resistance (the heat sink itself, **this is what we design**)
+- $R_{\theta,jc}$ = junction-to-case resistance, inside the package, from the datasheet
+- $R_{\theta,cs}$ = case-to-sink resistance, through the thermal interface material (TIM), the paste or pad that fills the air gaps between the two surfaces
+- $R_{\theta,sa}$ = sink-to-ambient resistance, the heat sink itself. This is the one we design.
 
-The junction temperature is then:
+The temperature rise above the air is the heat flow times the total resistance, so the junction temperature is:
 
 $$T_j = T_{ambient} + Q \cdot R_{\theta,total}$$
 
-where $Q$ is the power dissipated (watts).
+where $T_j$ and $T_{ambient}$ are in °C and $Q$ is the power turned into heat, in W.
 
 <CardGrid>
   <Card title="Junction-to-Case (R_jc)" icon="document">
-    **Given by the component datasheet.** For a typical power MOSFET in TO-220 package: $R_{jc} \approx 0.5 - 3.0 \text{ °C/W}$. For a BGA processor: $R_{jc} \approx 0.2 - 1.0 \text{ °C/W}$. The designer cannot change this value; it is a property of the chip package.
+    From the datasheet. A power transistor in a TO-220 package: 0.5 to 3.0 °C/W. A processor in a BGA package: 0.2 to 1.0 °C/W. You cannot change it.
   </Card>
 
   <Card title="Case-to-Sink (R_cs)" icon="setting">
-    **Controlled by the thermal interface material (TIM).** Thermal paste: $R_{cs} \approx 0.1 - 0.5 \text{ °C/W}$. Thermal pad: $R_{cs} \approx 0.5 - 2.0 \text{ °C/W}$. Bare contact (no TIM): $R_{cs} \approx 1.0 - 3.0 \text{ °C/W}$. Always use TIM.
+    Set by the interface material. Thermal paste: 0.1 to 0.5 °C/W. Thermal pad: 0.5 to 2.0 °C/W. Bare contact: 1.0 to 3.0 °C/W. Always use paste or a pad.
   </Card>
 
   <Card title="Sink-to-Ambient (R_sa)" icon="star">
-    **This is what we design and optimize.** Depends on: fin geometry, surface area, airflow conditions, material conductivity. Typical range: $R_{sa} \approx 1.0 - 20.0 \text{ °C/W}$ for natural convection heat sinks of 25-100mm size.
+    Set by fin shape, surface area and air flow. Heat sinks of 25 to 100 mm in still air give 1 to 20 °C/W.
   </Card>
 
   <Card title="Design Target" icon="approve-check">
-    **Work backward from the maximum junction temperature.** Given $T_{j,max}$, $T_{ambient}$, and $Q$, the required total resistance is: $R_{\theta,total} \leq \frac{T_{j,max} - T_{ambient}}{Q}$. Subtract $R_{jc}$ and $R_{cs}$ to find the required $R_{sa}$.
+    Work backward from the highest junction temperature allowed: $R_{\theta,total} \leq \frac{T_{j,max} - T_{ambient}}{Q}$. Subtract $R_{jc}$ and $R_{cs}$ to find the $R_{sa}$ you need.
   </Card>
 </CardGrid>
 
 ### Design Example: Target Thermal Resistance
 
-Consider a voltage regulator dissipating 5W with these constraints:
+A voltage regulator turns 5 W into heat:
 
 ```python
 """
@@ -144,37 +136,53 @@ Required R_sa ≤ 15.2 °C/W
 Design target R_sa: 12.2 °C/W
 ```
 
-This is a comfortable target for a moderately-sized heat sink with natural convection. For higher power (20W+), the target $R_{sa}$ drops below 2-3 °C/W and forced convection (a fan) becomes necessary.
+The rise allowed is $125 - 40 = 85$ °C for 5 W, so the whole chain may have 17.0 °C/W. A small heat sink in still air can meet 12.2 °C/W. Above about 20 W the target falls below 2 to 3 °C/W, and a fan is needed.
 
 ## Natural Convection Heat Transfer
 
 <InArticleAd />
 
-
-For a heat sink without a fan, the dominant heat transfer mode is **natural convection**, where warm air rises along the fin surfaces, drawing cool air in from below.
+A heat sink without a fan relies on natural convection. Air that touches a warm fin heats up, becomes lighter and rises, and cooler air is drawn in from below, as in a chimney. Only the small difference in air density drives this flow, so it is weak and easy to block.
 
 ### Governing Equations
 
-The heat transfer coefficient $h$ for natural convection from a vertical plate (a single fin) is derived from the Nusselt number correlation:
+A surface gives the air the heat $Q = h \cdot A \cdot (T_s - T_\infty)$, so the resistance of the heat sink is:
+
+$$R_{\theta,sa} = \frac{1}{h \cdot A}$$
+
+where $A$ is the surface area (m²), $T_s$ the surface temperature, $T_\infty$ the air temperature far from the surface, and $h$ the heat transfer coefficient in W/(m²·K): the watts each square metre gives up per degree of difference. Area is easy to add. The difficulty is $h$, because it depends on how the air moves. In still air it is only 5 to 10 W/(m²·K).
+
+Engineers find $h$ from formulas fitted to experiments, called correlations, written with two numbers that have no unit. The Rayleigh number $Ra_L$ measures how strongly the warm surface drives the air upward:
+
+$$Ra_L = \frac{g \cdot \beta \cdot (T_s - T_\infty) \cdot L^3}{\nu^2} \cdot Pr$$
+
+where $g$ = 9.81 m/s², $L$ is the height of the surface along the flow (m), $\nu$ is the kinematic viscosity of air (m²/s), $Pr$ is the Prandtl number of air (about 0.71), and $\beta = 1/T_{film}$ (1/K) is the expansion of air per degree, at the film temperature $T_{film} = (T_s + T_\infty)/2$ in kelvin.
+
+The Nusselt number $Nu_L$ is $h$ made unitless, with $k_{air}$ the thermal conductivity of air in W/(m·K):
 
 $$Nu_L = \frac{h \cdot L}{k_{air}}$$
 
-For a vertical isothermal plate in air, the Churchill-Chu correlation gives:
+For one vertical plate at an even temperature, the Churchill-Chu correlation gives:
 
 $$Nu_L = \left[ 0.825 + \frac{0.387 \cdot Ra_L^{1/6}}{\left(1 + \left(\frac{0.492}{Pr}\right)^{9/16}\right)^{8/27}} \right]^2$$
 
-where the Rayleigh number is:
-
-$$Ra_L = Gr_L \cdot Pr = \frac{g \cdot \beta \cdot (T_s - T_\infty) \cdot L^3}{\nu^2} \cdot Pr$$
-
-and $\beta = 1/T_{film}$ (in Kelvin), $T_{film} = (T_s + T_\infty)/2$.
+This formula is for one plate alone in open air. Each fin warms a thin layer of air beside it, the boundary layer. When the gap between two fins is only a few millimetres the two layers meet, the air in the gap slows, and $h$ falls far below the value for one plate. A second correlation, for the channel between two plates, covers this case.
 
 ### Python Implementation: Thermal Calculator
+
+The calculator holds the properties of air, finds $h$ for one plate and for the channel between fins, keeps the smaller, and returns $R_{sa}$. Before you read it:
+
+- `fin_height` is the vertical length of a fin, along the air flow, and `fin_length` is how far it stands out from the base. The CadQuery functions later use `fin_height` for the stand-out distance.
+- The surface temperature is not known in advance, so the function assumes 80 °C in air at 25 °C.
+- The fin efficiency `eta_fin` allows for the tip of a fin being cooler than its root.
+
+Radiation is left out, and such correlations are accurate to about 20% at best. Use the result to find the best shape, then measure.
 
 ```python
 """
 Natural convection thermal resistance calculator for heat sinks.
-Uses Churchill-Chu correlation for vertical plates.
+Uses Churchill-Chu correlation for vertical plates, limited by the
+Bar-Cohen and Rohsenow channel correlation when fins are close together.
 """
 
 import math
@@ -190,17 +198,17 @@ class AirProperties:
 
     @property
     def rho(self) -> float:
-        """Density [kg/m^3] — ideal gas law."""
+        """Density [kg/m^3]: ideal gas law."""
         return 101325.0 / (287.058 * self.T_film)
 
     @property
     def cp(self) -> float:
-        """Specific heat [J/(kg·K)] — nearly constant for air."""
+        """Specific heat [J/(kg·K)]: nearly constant for air."""
         return 1007.0
 
     @property
     def mu(self) -> float:
-        """Dynamic viscosity [Pa·s] — Sutherland's law."""
+        """Dynamic viscosity [Pa·s]: Sutherland's law."""
         T = self.T_film
         return 1.716e-5 * (T / 273.15) ** 1.5 * (273.15 + 110.4) / (T + 110.4)
 
@@ -278,10 +286,18 @@ def thermal_resistance_plate_fin(
     else:
         fin_spacing = base_width
 
-    # Check if spacing is too tight (flow restriction)
-    # Elenbaas optimal spacing for natural convection:
-    # S_opt ≈ 2.71 * (L^0.25 / Ra_S^0.25) — simplified
-    # For practical purposes, spacing < 3mm severely restricts flow
+    # Check if spacing is too tight (flow restriction).
+    # Between closely spaced fins the boundary layers merge, so the
+    # isolated-plate value above is too high. The Bar-Cohen and Rohsenow
+    # correlation for a vertical channel of width S and length L gives
+    # Nu_S = [576 / El^2 + 2.873 / El^0.5]^(-1/2), with El = Ra_S * S / L.
+    # It tends to the isolated-plate result when the fins are far apart.
+    if n_fins > 1 and fin_spacing > 0:
+        Ra_S = (g * air.beta * dT * fin_spacing ** 3) / (air.nu ** 2) * air.Pr
+        El = Ra_S * fin_spacing / L_char
+        Nu_S = (576.0 / El ** 2 + 2.873 / El ** 0.5) ** -0.5
+        h_channel = Nu_S * air.k / fin_spacing
+        h_avg = min(h_avg, h_channel)
 
     # Total fin surface area (both sides of each fin + base between fins)
     fin_area = n_fins * 2 * fin_length * fin_height  # both sides
@@ -291,7 +307,7 @@ def thermal_resistance_plate_fin(
 
     # Fin efficiency (for thin aluminum fins, efficiency is high)
     # eta_fin = tanh(m*L) / (m*L), where m = sqrt(2*h/(k_fin*t))
-    k_fin = 205.0  # W/(m·K), aluminum 6061
+    k_fin = 167.0  # W/(m·K), aluminum 6061-T6
     m = math.sqrt(2 * h_avg / (k_fin * fin_thickness))
     mL = m * fin_length
     if mL > 0:
@@ -325,24 +341,14 @@ def thermal_resistance_plate_fin(
 <InArticleAd />
 
 
-Three fin geometries are commonly used in heat sink design. Each has distinct thermal and manufacturing characteristics.
+Three fin shapes are common. Each tab builds one as a solid: a base plate, then fins or pins joined to it one at a time with `union`. The thermal numbers come from the calculator above, which covers straight fins only.
 
 <Tabs>
   <TabItem label="Straight Rectangular Fins">
 
 ### Straight Rectangular Fin Heat Sink
 
-The simplest and most common geometry. Parallel plate fins extending vertically from a flat base. Easy to manufacture by extrusion, machining, or 3D printing.
-
-**Advantages:**
-- Simplest to manufacture (aluminum extrusion)
-- Well-understood thermal correlations
-- Low cost at volume
-- Natural convection channels align with gravity
-
-**Disadvantages:**
-- Airflow is one-directional (orientation-sensitive)
-- Limited surface area per unit volume compared to pin fins
+Parallel plates on a flat base: the simplest and most common shape, and the cheapest, because aluminum can be extruded through a die in this form. The air can pass in one direction only, so the fins must stand vertical.
 
 ```python
 """
@@ -374,8 +380,9 @@ def straight_fin_heatsink(
 
     # Calculate fin positions (evenly distributed)
     if n_fins > 1:
-        spacing = base_width / (n_fins - 1)
-        x_start = -base_width / 2
+        # Outer fins sit flush with the edges of the base
+        spacing = (base_width - fin_thickness) / (n_fins - 1)
+        x_start = -base_width / 2 + fin_thickness / 2
     else:
         spacing = 0
         x_start = 0
@@ -394,8 +401,7 @@ def straight_fin_heatsink(
 
         hs = hs.union(fin)
 
-    # Fillet the base-to-fin junctions for stress relief and airflow
-    # (small fillet at fin roots)
+    # Round the fin tips (the edges along Y at the top of the fins)
     hs = hs.edges("|Y").edges(">Z").fillet(0.5)
 
     return hs
@@ -416,17 +422,7 @@ heatsink_straight = straight_fin_heatsink(
 
 ### Pin-Fin Array Heat Sink
 
-Cylindrical or square pins arranged in a grid pattern. Pins provide omnidirectional airflow. The heat sink performs equally regardless of orientation, making pin fins ideal for natural convection where airflow direction is uncertain.
-
-**Advantages:**
-- Omnidirectional airflow (orientation-independent)
-- Higher surface area per unit volume
-- Better performance with cross-flow or mixed convection
-
-**Disadvantages:**
-- Higher manufacturing cost (CNC or casting, not extrusion)
-- Lower natural convection performance than plate fins in ideal orientation
-- Minimum pin diameter limited by manufacturing (about 1.0mm for 3D printing)
+Round or square pins in a grid. Air can pass from any side, so the heat sink works in any mounting direction. Pins cannot be extruded, so they cost more (machining or casting), and a 3D printed pin needs a diameter of about 1 mm or more.
 
 ```python
 """
@@ -512,7 +508,7 @@ heatsink_pin = pin_fin_heatsink(
 )
 
 # Pin count and surface area
-n_pins = 8 * 8  # approximately, for 50mm base with 6mm spacing
+n_pins = 7 * 7  # for a 50mm base with 6mm spacing and a 6mm edge margin
 pin_area_each = math.pi * 3.0 * 25.0  # mm^2 per pin (lateral surface)
 total_pin_area = n_pins * pin_area_each
 print(f"Pin count: {n_pins}")
@@ -524,18 +520,7 @@ print(f"Total fin area: {total_pin_area:.0f} mm² = {total_pin_area/100:.1f} cm�
 
 ### Radial (Sunflower) Fin Heat Sink
 
-Fins radiate outward from a central hot spot, like spokes of a wheel. This geometry is optimal when heat is concentrated at a single point (e.g., directly above a BGA chip) and the heat sink is exposed to air from all sides.
-
-**Advantages:**
-- Optimal for point heat sources
-- Omnidirectional natural convection
-- Aesthetically distinctive
-- Good thermal spreading from center
-
-**Disadvantages:**
-- Cannot be extruded (CNC, casting, or 3D printing only)
-- Complex to analyze thermally (non-uniform fin spacing)
-- Fin tips are widely spaced (wasted material at periphery)
+Fins run outward from a central hot spot like the spokes of a wheel. The shape suits heat that enters at one point, with air free on all sides. It cannot be extruded, and the gap between fins widens toward the tips, so it is hard to analyze and the outer part is used poorly.
 
 ```python
 """
@@ -631,9 +616,11 @@ heatsink_radial = radial_fin_heatsink(
 <InArticleAd />
 
 
-The core of thermal optimization is sweeping the design space: varying fin count, fin height, and fin spacing, then computing $R_{sa}$ for each combination. The result is a performance map that reveals the optimal design point.
+No formula gives the best heat sink directly, so we try many. A sweep runs the calculator for every combination of fin count (5 to 30) and fin height (10 to 50 mm) on the 50 mm base, 520 designs in all. On a fixed base the gap follows from the fin count.
 
 ### Sweep Implementation
+
+The sweep prints a range from 3.28 °C/W (8 fins of 50 mm) to more than 70,000 °C/W. The huge values belong to 30 fins with gaps of 0.2 mm: the model says that no air passes. It is not a real temperature.
 
 ```python
 """
@@ -672,8 +659,8 @@ def sweep_straight_fins(
         for j, n in enumerate(fin_counts):
             result = thermal_resistance_plate_fin(
                 n_fins=n,
-                fin_height=fh,
-                fin_length=fh,           # fin length = fin height for vertical fins
+                fin_height=base_depth,   # vertical flow length along each fin
+                fin_length=fh,           # how far the fin stands out from the base
                 fin_thickness=fin_thickness,
                 base_width=base_width,
                 base_depth=base_depth,
@@ -787,14 +774,14 @@ plot_thermal_map(sweep, R_sa_target=12.0)
 
 ### Interpreting the Performance Map
 
-The thermal performance map reveals three key insights:
+The left map shows $R_{sa}$ as colour over fin count and fin height, and the right map shows the gap between fins. Read three things from them:
 
 <Steps>
-1. **More fins reduce $R_{sa}$**, but only to a point. Beyond about 20 fins on a 50mm base, the spacing becomes so tight that natural convection flow is restricted. $R_{sa}$ may actually increase with too many fins.
+1. **More fins reduce $R_{sa}$ only up to a point.** Beyond 8 fins on this 50 mm base the gap is under 5 mm, the air between the fins slows, and $R_{sa}$ rises quickly.
 
-2. **Taller fins reduce $R_{sa}$**, but with diminishing returns. Fin efficiency drops as height increases because the fin tip is far from the base and conducts less heat. Beyond about 40mm, adding height provides minimal benefit for aluminum.
+2. **Taller fins reduce $R_{sa}$, but each added millimetre helps less.** The tip of a tall fin is far from the base and cooler, so it gives up less heat.
 
-3. **The feasibility boundary is set by fin spacing.** For FDM 3D printing, the minimum practical spacing is about 2mm. For CNC extrusion, 1.5mm is achievable. The red line on the spacing map marks the manufacturing limit; any design above and to the right of this line is not producible.
+3. **The gap also sets what can be made.** A printed heat sink needs gaps of about 2 mm, a machined or extruded one about 1.5 mm. Designs to the right of the red line on the spacing map cannot be produced.
 </Steps>
 
 ## Optimization: Finding the Best Configuration
@@ -802,7 +789,7 @@ The thermal performance map reveals three key insights:
 <InArticleAd />
 
 
-With the sweep data, we can apply constraints and find the optimal design point.
+The lowest $R_{sa}$ in the whole sweep is not always a part you can make or fit. The function below first removes every design that breaks a limit (gap too narrow to make, fins too tall for the space, too many fins), then picks the lowest $R_{sa}$ among those that remain.
 
 ```python
 """
@@ -885,46 +872,47 @@ if "meets_target" in optimal:
 
 ```
 Optimal heat sink configuration:
-  Fins:         18
-  Fin height:   35.0 mm
-  Fin spacing:  2.6 mm
-  R_sa:         5.83 °C/W
-  Surface area: 286.4 cm²
+  Fins:         8
+  Fin height:   33.2 mm
+  Fin spacing:  5.4 mm
+  R_sa:         4.60 °C/W
+  Surface area: 309.3 cm²
   Meets target: YES
 ```
+
+The result is 8 fins, far fewer than the 22 allowed. The air set the limit: with 9 fins the gap falls to 4.6 mm and $R_{sa}$ rises to 5.1 °C/W.
+
+One caution. The calculator assumed a surface 55 °C above the air (80 °C in 25 °C air). This heat sink, with 5 W in air at 40 °C, runs only about 30 °C above the air. A smaller difference drives the air less, so the real $R_{sa}$ is higher: solving again with the real temperatures gives about 6.3 °C/W, still well inside the 12.2 °C/W target.
 
 ## Design Constraints
 
 <InArticleAd />
 
-
-Real heat sink designs must satisfy constraints beyond thermal performance. Here are the key considerations.
+A heat sink must also be possible to make, to mount and to pay for.
 
 <CardGrid>
   <Card title="Manufacturing Limits" icon="setting">
-    - **FDM 3D printing**: minimum fin thickness 1.0mm, minimum spacing 2.0mm, draft angles not required
-    - **CNC machining**: minimum fin thickness 0.8mm, minimum spacing 1.5mm (end mill diameter), maximum aspect ratio (height/thickness) about 15:1
-    - **Aluminum extrusion**: minimum fin thickness 1.0mm, minimum spacing 1.5mm, fins must be straight and parallel, no undercuts
-    - **Die casting**: minimum fin thickness 1.5mm, draft angle 1-3 degrees required on all vertical surfaces
+    - FDM 3D printing: fins at least 1.0 mm thick, gaps at least 2.0 mm
+    - CNC machining: fins at least 0.8 mm thick, gaps at least 1.5 mm (the cutter diameter), height no more than about 15 times the thickness
+    - Aluminum extrusion: fins at least 1.0 mm thick, gaps at least 1.5 mm, straight parallel fins only
+    - Die casting: fins at least 1.5 mm thick, with 1 to 3 degrees of draft (taper) so the part leaves the mold
   </Card>
 
   <Card title="Airflow Restrictions" icon="right-arrow">
-    - **Minimum spacing for natural convection**: Elenbaas (1942) showed that optimal spacing for vertical channels is $S_{opt} \approx 2.71 \cdot L / Ra_S^{1/4}$ where $Ra_S$ is based on spacing. Practically, 6-10mm is optimal for 25-50mm tall fins in still air.
-    - **Orientation matters**: Straight fins must be vertical for natural convection to work. Horizontal fins trap hot air.
-    - **Enclosure effects**: If the heat sink is inside an enclosure, effective ambient temperature rises and airflow is restricted.
+    - Gap: in still air, 4 to 7 mm is best for fins 25 to 50 mm long.
+    - Direction: straight fins must stand vertical. Horizontal fins trap the warm air.
+    - Enclosure: inside a box the air around the heat sink is warmer and moves less.
   </Card>
 
   <Card title="Thermal Interface" icon="star">
-    - **Flat base required**: The base must be flat to within 0.05mm for good contact with thermal paste. FDM printing typically achieves 0.1mm flatness, so post-processing (sanding, milling) may be needed.
-    - **Mounting pressure**: Heat-set inserts or spring clips provide consistent clamping force. Optimal pressure for thermal paste is 200-400 kPa.
-    - **Base thickness**: Minimum 2mm for thermal spreading. Thicker bases (3-5mm) improve spreading for localized heat sources.
+    - The base must be flat to within 0.05 mm. A printed base is flat to about 0.1 mm, so sand or mill it.
+    - A spring clip or screws must press the part on evenly, at 200 to 400 kPa for thermal paste.
+    - The base should be at least 2 mm thick, and 3 to 5 mm for a small heat source, so the heat spreads to all fins.
   </Card>
 
   <Card title="Cost Considerations" icon="approve-check">
-    - **Material volume** directly affects cost (aluminum at about $3-5/kg)
-    - **More fins = more machining time** (CNC) or longer print time (FDM)
-    - **Diminishing returns**: beyond the knee of the R_sa curve, adding fins/height provides little thermal benefit for significant cost increase
-    - **Standard extrusion profiles** are cheaper than custom geometries
+    - Aluminum costs about 3 to 5 USD per kg, and more fins mean more machining or printing time.
+    - A standard extruded profile is cheaper than a custom shape.
   </Card>
 </CardGrid>
 
@@ -933,7 +921,7 @@ Real heat sink designs must satisfy constraints beyond thermal performance. Here
 <InArticleAd />
 
 
-With the optimal parameters identified, we generate the final CadQuery model with full engineering justification.
+The function below builds the chosen heat sink and adds four holes for M3 screws, each with a recess for the screw head.
 
 ```python
 """
@@ -1026,7 +1014,7 @@ def generate_optimized_heatsink(
             cbore = (
                 cq.Workplane("XY")
                 .center(hx, hy)
-                .circle(mounting_hole_dia + 1.5)  # M3 head is ~5.5mm
+                .circle((mounting_hole_dia + 2.8) / 2)  # 6.0mm counterbore for the 5.5mm M3 head
                 .extrude(1.8)  # recess depth
             )
             hs = hs.cut(cbore)
@@ -1049,7 +1037,7 @@ print("Exported: heatsink_optimized.step, heatsink_optimized.stl")
 ```
 
 :::tip[Instrument it]
-The model predicts a junction temperature; the only way to trust it is to measure the real one. Put an NTC thermistor or a digital sensor (a precise TMP117, or a DS18B20) on the component case and another on the heat-sink base to read the actual thermal resistance, or a thermocouple with a MAX31855 for anything hot. An [ESP32 or STM32](/education/sensor-actuator-interfacing-stm32/) reads them, and can do more than verify: drive a PWM fan or [throttle the load](https://siliconwit.io) when the temperature climbs, so the part never cooks.
+The model predicts a junction temperature, and the only way to trust it is to measure. Put a temperature sensor (an NTC thermistor, a TMP117 or a DS18B20) on the case of the part and another on the base of the heat sink, and divide the difference to the air by the power to get the real thermal resistance. An [ESP32 or STM32](/education/sensor-actuator-interfacing-stm32/) can read them and also act: drive a fan or [reduce the load](https://siliconwit.io) when the temperature climbs.
 :::
 
 ## Thermal Verification Summary
@@ -1057,7 +1045,7 @@ The model predicts a junction temperature; the only way to trust it is to measur
 <InArticleAd />
 
 
-Every engineering design requires a verification step. Here we document the thermal justification for the optimized heat sink.
+The last step puts the designed $R_{sa}$ back into the chain and prints the temperature at each point. The junction must be below 125 °C, and the largest resistance shows where further effort would pay.
 
 ```python
 """
@@ -1107,9 +1095,9 @@ def thermal_summary(optimal: dict, Q: float, T_ambient: float,
     print(f"  Margin percentage:     {margin / (125.0 - T_ambient) * 100:.0f}%")
 
     if T_j < 125.0:
-        print(f"\n  ✓ DESIGN PASSES — T_junction within safe limit")
+        print(f"\n  ✓ DESIGN PASSES: T_junction within safe limit")
     else:
-        print(f"\n  ✗ DESIGN FAILS — increase heat sink size or add forced air")
+        print(f"\n  ✗ DESIGN FAILS: increase heat sink size or add forced air")
 
     print("=" * 60)
 
@@ -1137,39 +1125,40 @@ Operating Conditions:
 Thermal Resistance Chain:
   R_jc (junction→case):  1.50 °C/W  (datasheet)
   R_cs (case→sink):      0.30 °C/W  (thermal paste)
-  R_sa (sink→ambient):   5.83 °C/W  (designed)
+  R_sa (sink→ambient):   4.60 °C/W  (designed)
   ─────────────────────────────────
-  R_total:               7.63 °C/W
+  R_total:               6.40 °C/W
 
 Temperature Results:
-  T_junction:  78.2 °C  (max allowed: 125 °C)
-  T_case:      70.7 °C
-  T_heatsink:  69.2 °C
+  T_junction:  72.0 °C  (max allowed: 125 °C)
+  T_case:      64.5 °C
+  T_heatsink:  63.0 °C
   T_ambient:   40.0 °C
 
 Heat Sink Design:
   Type:          Straight rectangular fins
-  Fins:          18
-  Fin height:    35.0 mm
-  Fin spacing:   2.6 mm
-  Surface area:  286.4 cm²
+  Fins:          8
+  Fin height:    33.2 mm
+  Fin spacing:   5.4 mm
+  Surface area:  309.3 cm²
   Base:          50 × 50 × 3 mm
   Material:      Aluminum 6061-T6 (k = 167 W/m·K)
 
 Margins:
-  Temperature margin:    46.8 °C
-  Margin percentage:     55%
+  Temperature margin:    53.0 °C
+  Margin percentage:     62%
 
-  ✓ DESIGN PASSES — T_junction within safe limit
+  ✓ DESIGN PASSES: T_junction within safe limit
 ============================================================
 ```
+
+The 72 °C uses the $R_{sa}$ computed for an 80 °C surface. With the 6.3 °C/W found above for the real temperatures, the junction is near 80 °C. The design still passes with a wide margin, and this is why the margin is there.
 
 ## Comparing All Three Geometries
 
 <InArticleAd />
 
-
-To make a fair comparison, we evaluate all three fin types at similar overall volume and base size.
+The function below puts the three fin types on the same 50 mm base with 30 mm fins. Only the straight-fin number comes from the full model. The pin-fin number uses a formula for one cylinder alone in open air, and the radial number borrows $h$ from the straight fins. The run prints 6.1 °C/W for straight fins, 2.8 for pins and 7.6 for radial fins. This is not proof that pins are twice as good: 64 pins standing 3 mm apart block each other's air, as close fins do, and the formula ignores it.
 
 ```python
 """
@@ -1187,9 +1176,9 @@ def compare_geometries(Q: float = 5.0, T_amb: float = 40.0):
     fin_height = 0.030    # m (30mm)
     fin_t = 0.0015        # m (1.5mm)
 
-    # 1. Straight fins: 15 fins, 30mm tall
+    # 1. Straight fins: 8 fins (spacing near the optimum), 30mm tall
     straight = thermal_resistance_plate_fin(
-        n_fins=15, fin_height=fin_height, fin_length=fin_height,
+        n_fins=8, fin_height=base_size, fin_length=fin_height,
         fin_thickness=fin_t, base_width=base_size, base_depth=base_size,
         T_surface=80.0, T_ambient=T_amb,
     )
@@ -1197,7 +1186,9 @@ def compare_geometries(Q: float = 5.0, T_amb: float = 40.0):
     # 2. Pin fins: approximate equivalent
     # For pins, use single-cylinder Nusselt correlation
     # Nu_D = C * Ra_D^n (Morgan correlation for cylinders)
-    # This is approximate — full analysis would use array correction factors
+    # This is approximate: full analysis would use array correction factors.
+    # A single cylinder ignores the way neighbouring pins block the flow,
+    # so the pin-fin result below is optimistic.
     pin_d = 0.003      # m (3mm diameter)
     pin_spacing = 0.006 # m (6mm C-to-C)
     n_pins_x = int(base_size / pin_spacing)
@@ -1245,7 +1236,7 @@ def compare_geometries(Q: float = 5.0, T_amb: float = 40.0):
         ("Radial", R_sa_radial, (radial_area + base_area_radial) * 1e4),
     ]:
         T_j = T_amb + Q * (1.5 + 0.3 + R_sa)
-        print(f"{name:<20} {15 if name == 'Straight' else n_pins if name == 'Pin-fin' else n_radial:<8} "
+        print(f"{name:<20} {8 if name == 'Straight' else n_pins if name == 'Pin-fin' else n_radial:<8} "
               f"{area:<12.1f} {R_sa:<14.2f} {T_j:<10.1f}")
 
 compare_geometries()
@@ -1256,49 +1247,31 @@ compare_geometries()
 <Tabs>
   <TabItem label="Straight Fins: Best For">
 
-**Use straight rectangular fins when:**
+Use straight fins when the mounting direction is known and vertical, the power is low to moderate (under about 15 W without a fan), and cost matters: extruded aluminum is the cheapest heat sink.
 
-- Natural convection with a known vertical orientation
-- Low to moderate power (under 15W passive cooling)
-- Cost is a primary concern (extruded aluminum is cheapest)
-- The heat source covers most of the base area
-- Space is not height-constrained
+A quick check is the Elenbaas spacing, the gap that removes the most heat from a given width:
 
-**Key formula, Elenbaas optimal spacing:**
+$$S_{opt} = 2.71 \cdot \frac{L}{Ra_L^{1/4}}$$
 
-$$S_{opt} = 2.71 \cdot \frac{L}{Ra_S^{1/4}}$$
-
-where $L$ is the channel length (fin height) and $Ra_S$ is the Rayleigh number based on spacing $S$. For a 30mm tall fin in 40°C air with a 60°C surface, $S_{opt} \approx 7-9$ mm.
+where $L$ is the vertical length of the fin (m) and $Ra_L$ is the Rayleigh number based on $L$. For a 30 mm fin at 60 °C in 40 °C air, $S_{opt} \approx 6$ mm.
 
   </TabItem>
   <TabItem label="Pin Fins: Best For">
 
-**Use pin fins when:**
+Use pin fins when the mounting direction is unknown or changes, as in portable equipment, or when a fan blows across the heat sink.
 
-- Orientation is unknown or variable (portable electronics)
-- Forced convection with cross-flow (fan blowing across pins)
-- The heat sink is inside a ventilated enclosure with unpredictable airflow
-- Aesthetics matter (pin arrays look technical and intentional)
-
-**Key advantage:** Omnidirectional performance. A pin-fin heat sink loses only about 10-15% performance when rotated 90 degrees. A straight-fin heat sink can lose 40-60%.
-
-**Key disadvantage:** In pure natural convection with vertical orientation, pin fins typically have 15-25% higher $R_{sa}$ than equivalent straight fins because the channel flow between plates is more effective than flow around cylinders.
+Air can pass a pin array from any side. Turned by 90 degrees, a pin-fin heat sink loses only about 10 to 15% of its performance, where a straight-fin heat sink can lose 40 to 60%. The price: mounted vertically in still air, pin fins typically have a 15 to 25% higher $R_{sa}$ than straight fins of the same size.
 
   </TabItem>
   <TabItem label="Radial Fins: Best For">
 
-**Use radial fins when:**
+Use radial fins when the heat comes from one small source, such as an LED or a single chip, and the top of the heat sink is open to the air.
 
-- Heat source is a concentrated point (single IC, LED)
-- The heat sink has an unobstructed top surface (no enclosure directly above)
-- Symmetry is desired (LED cooling, single-chip applications)
-- Conduction spreading is important (radial geometry improves spreading from center)
-
-**Key formula, spreading resistance for point source:**
+Heat from a small source must first spread through the base, and that adds a spreading resistance:
 
 $$R_{spreading} = \frac{1}{2 \pi k t} \cdot \left(1 - \frac{r_{source}}{r_{sink}}\right)$$
 
-where $r_{source}$ is the heat source radius, $r_{sink}$ is the heat sink base radius, $k$ is thermal conductivity, and $t$ is base thickness.
+where $r_{source}$ and $r_{sink}$ are the radii of the heat source and of the base (m), $k$ is the thermal conductivity of the base in W/(m·K), and $t$ is the base thickness (m).
 
   </TabItem>
 </Tabs>
@@ -1369,16 +1342,16 @@ cq.exporters.export(heatsink_with_clip, "heatsink_with_clip.step")
 :::caution[Common thermal design errors]
 
 **1. Ignoring orientation**
-Straight fins in a horizontal orientation trap hot air between them. $R_{sa}$ can double compared to the vertical case. Always specify the required mounting orientation in the design documentation.
+Straight fins mounted horizontally trap the warm air, and $R_{sa}$ can double. State the mounting direction on the drawing.
 
 **2. Using too many thin fins**
-More surface area does not always mean better cooling. When fin spacing drops below about 3mm for natural convection, the boundary layers from adjacent fins merge and choke the flow. The channel acts like a narrow duct with very low velocity.
+More area is not always more cooling. Below a gap of about 3 to 5 mm in still air, the boundary layers of neighboring fins merge and the flow stops.
 
 **3. Neglecting radiation**
-At typical heat sink temperatures (50-80°C), radiation can contribute 20-40% of total heat dissipation for painted/anodized surfaces. Bare polished aluminum has an emissivity of only 0.05, while black anodized aluminum has an emissivity of 0.85. Always anodize or paint heat sinks when possible.
+At 50 to 80 °C a painted or anodized surface loses 20 to 40% of its heat by radiation. Bare polished aluminum has an emissivity of only 0.05, and black anodized aluminum 0.85. Anodize or paint the heat sink when you can.
 
-**4. Assuming constant thermal properties**
-Air properties (viscosity, conductivity, density) change with temperature. A heat sink designed at 25°C ambient may underperform at 40°C ambient because the reduced temperature difference lowers the Rayleigh number and therefore $h$.
+**4. Designing at one temperature**
+A smaller temperature difference between surface and air drives the air less, so $h$ falls. A heat sink calculated for a large difference performs worse when the difference is small.
 :::
 
   </TabItem>
@@ -1386,17 +1359,17 @@ Air properties (viscosity, conductivity, density) change with temperature. A hea
 
 :::caution[Common manufacturing errors]
 
-**1. Fin aspect ratio too high**
-CNC: Fins taller than 15:1 (height:thickness) vibrate during machining, causing poor surface finish and potential tool breakage. FDM: Fins taller than 20:1 may warp or detach from the base during printing.
+**1. Fins too tall for their thickness**
+A fin more than 15 times as tall as it is thick vibrates under the cutter. A printed fin above 20 times can warp or break off.
 
-**2. No draft angles for casting**
-If the heat sink will be die-cast, every vertical surface needs 1-3 degrees of draft. Without draft, the part cannot be ejected from the mold.
+**2. No draft for casting**
+Without 1 to 3 degrees of draft the part does not leave the mold.
 
-**3. Base flatness**
-FDM-printed bases are typically flat to about 0.1-0.2mm due to warpage. For good thermal contact, sand the base flat or mill it on a CNC after printing. A gap of even 0.05mm filled with air (instead of thermal paste) dramatically increases $R_{cs}$.
+**3. Base not flat**
+A printed base warps by 0.1 to 0.2 mm. An air gap of even 0.05 mm raises $R_{cs}$ sharply, so sand or mill the base.
 
-**4. Forgetting thermal interface clearance**
-The mounting holes must be sized for the actual fastener plus clearance. If the screws are too tight, they can bow the base plate, creating a gap at the center where it matters most.
+**4. Screws that bow the base**
+Give the mounting holes clearance. Screws pulled too tight can bend the base and open a gap at its center, where the heat enters.
 :::
 
   </TabItem>
@@ -1407,18 +1380,12 @@ The mounting holes must be sized for the actual fastener plus clearance. If the 
 <InArticleAd />
 
 
-**In this lesson, you:**
+- The junction temperature is the air temperature plus power times the sum of three resistances. Only the last one, $R_{sa}$, is yours to design.
+- $R_{sa} = 1/(h \cdot A)$. Fins add area $A$, but fins too close together destroy $h$, so there is a best fin count.
+- A sweep with limits finds that count: 8 fins on this 50 mm base.
+- The model is a guide to the best shape. Measure the real part.
 
-- Modeled the complete thermal resistance chain from junction to ambient ($R_{jc} + R_{cs} + R_{sa}$) and calculated the required $R_{sa}$ from component specifications
-- Implemented the Churchill-Chu natural convection correlation with proper air property calculations (Sutherland's law for viscosity, ideal gas density)
-- Built three distinct fin geometries in CadQuery: straight rectangular fins, pin-fin arrays, and radial/sunflower fins
-- Swept fin count and fin height to generate 2D thermal performance maps using matplotlib contour plots
-- Applied manufacturing constraints (minimum spacing, maximum aspect ratio) to find the feasible design space
-- Optimized heat sink geometry by finding the minimum $R_{sa}$ within the constrained feasible region
-- Generated a complete thermal verification summary documenting every step from specifications to results
-- Compared fin geometries and learned when each type is most appropriate
-
-**Next up:** [Lattice Structures & TPMS for Additive Manufacturing](./lattice-structures-tpms-additive-manufacturing). Generate strut-based lattices, TPMS surfaces, and graded-density structures for lightweight parts.
+**Next up:** [Lattice Structures & TPMS for Additive Manufacturing](/education/code-based-mechanical-design/lattice-structures-tpms-additive-manufacturing/), on light parts built from repeating cells.
 
 <CodeBasedMechanicalDesignComments />
 

@@ -1,10 +1,10 @@
 ---
 title: "Code-Based CAD in Action"
-description: "See what code-based CAD can do: 8 complete CadQuery examples that produce colorful 3D models, from parametric Lego bricks to planetary gear sets, each showing what becomes possible when your CAD model is a Python script"
+description: "See what code-based CAD can do: 8 complete CadQuery examples, from a parametric toy brick to a planetary gear set, each showing one thing that becomes easy when a CAD model is a Python script. They are demonstrations, not checked designs"
 contributors: "sam-macharia,consolata-kiiru,bright-gitari"
 pubDate: 2026-03-05
 tags: ["cadquery", "python", "parametric-design", "3d-modeling", "mechanical-engineering", "showcase"]
-excerpt: "Eight short, complete CadQuery scripts that produce beautiful 3D models. Each example highlights where a code-based approach shines: pattern generation, math-driven shapes, parametric families, and multi-part assemblies."
+excerpt: "Eight short, complete CadQuery scripts. Each shows where writing a model as code helps: repeated patterns, shapes from formulas, families of parts from one parameter, and assemblies of several parts."
 heroImage: "https://cdn.siliconwit.com/education/code-based-mechanical-design/code-based-mechanical-design.png"
 ---
 
@@ -25,11 +25,11 @@ import { Card, CardGrid, Badge, Steps, LinkButton, FileTree } from '@astrojs/sta
 
 import CodeBasedMechanicalDesignComments from '../../../../components/code-based-mechanical-design/CodeBasedMechanicalDesignComments.astro';
 
-In a GUI-based CAD tool, creating 50 variations of the same part means clicking through the same dialog 50 times. Generating geometry from a math equation means manually plotting points and connecting them with splines. And version-controlling a binary CAD file is nearly impossible: you cannot diff it, merge it, or review changes in a pull request. Code-based CAD solves all three problems because your model is a Python script. This lesson presents 8 short, complete CadQuery scripts that each produce a 3D model, from parametric Lego bricks to planetary gear sets, showing where a code-first approach shines. #CadQuery #CodeCAD #ParametricDesign
+To make 50 sizes of one part in a drawing program, you click through the same dialog 50 times. To make a shape from an equation, you plot points by hand and join them. And the saved file is binary, so nobody can read what changed between two versions. In code-based CAD (computer-aided design) the model is a Python script, so these three tasks become a loop, a formula and a text file. This lesson installs CadQuery, a Python library that builds solid models, and runs 8 short scripts that show the method. The 8 shapes are demonstrations: none is checked against a load or a standard. #CadQuery #CodeCAD #ParametricDesign
 
 ## Environment Setup
 
-Start by creating a project folder and a virtual environment, then install the four packages you need: CadQuery for 3D modeling, trimesh for GLB export, NumPy for array operations, and SciPy for mesh color processing.
+Create a project folder and a virtual environment (a private Python installation for this project), then install four packages: CadQuery builds the 3D models, trimesh writes the GLB files, and NumPy and SciPy do the array work for the mesh colors.
 
 <Tabs>
 <TabItem label="Linux/macOS">
@@ -91,14 +91,14 @@ After completing this lesson, your folder should look like this:
     - …
 </FileTree>
 
-Each script produces three files: `.step` for precise CAD editing in FreeCAD, `.stl` for 3D printing, and `.glb` for colored 3D viewing in a browser.
+Each script writes three files: `.step` keeps the exact surfaces for a CAD program such as FreeCAD, `.stl` is a mesh of flat triangles for a 3D printer, and `.glb` is a colored mesh for a browser.
 
 ## Export Helper
 
 <InArticleAd />
 
 
-All 8 examples use a shared `export_helper.py` that handles STEP, STL, and GLB output. The helper converts CadQuery shapes to colored GLB files via trimesh, so models look great in [SiliconWit's GLB viewer](https://siliconwit.com/product-development/glb-viewer/).
+All 8 examples call one shared file, `export_helper.py`, to write the three formats. Its `tolerance` argument is the largest distance, in mm, allowed between the true surface and the triangles of a mesh.
 
 Save this file as `export_helper.py` in your working directory:
 
@@ -216,13 +216,14 @@ def _print_summary(name, step_path, stl_path, glb_path):
     print(f"    GLB   {_size(glb_path):>8}   {glb_path}")
 ```
 
-Three export modes cover all examples:
-- `export_all()` for single-color parts (Lego brick, coaster, perforated plate, cable organizer, spring)
-- `export_gradient()` for Z-gradient coloring (vase, twisted tower)
-- `export_multipart()` for multi-color assemblies (planetary gears)
+The helper has three export functions:
+
+- `export_all()` for parts in one color (Lego brick, coaster, perforated plate, cable organizer, spring)
+- `export_gradient()` for a color that changes with height (vase, twisted tower)
+- `export_multipart()` for an assembly with one color for each part (planetary gears)
 
 :::tip[Viewing GLB files]
-Upload your `.glb` files to [SiliconWit's GLB Viewer](https://siliconwit.com/product-development/glb-viewer/) to see them in 3D with colors. STEP files can be opened in FreeCAD for dimensioning and further modification.
+Upload your `.glb` files to [SiliconWit's GLB Viewer](https://siliconwit.com/product-development/glb-viewer/) to see them in 3D with colors. Open the `.step` files in FreeCAD to measure or change them.
 :::
 
 ## 1. Parametric Lego Brick
@@ -231,7 +232,7 @@ Upload your `.glb` files to [SiliconWit's GLB Viewer](https://siliconwit.com/pro
 
 
 <Card title="Why Code Works Well Here" icon="rocket">
-Change `rows` and `cols`, and the entire brick regenerates with the correct number of studs, wall cavities, and dimensions. One `rarray()` call places all the studs at once. Want a 10x10 brick? Just change two numbers.
+Every size follows from two numbers: the body is `cols * unit` by `rows * unit`, where `unit` is 8 mm, the stud spacing of a real brick, and one `rarray()` call (a rectangular array) places all the studs. Set both numbers to 10 and run it again. The underside is a plain cavity with no tubes, so this model would not grip a real brick.
 </Card>
 
 ```python
@@ -287,7 +288,7 @@ export_all(body, "01_lego_brick", (220, 40, 40))
 
 
 <Card title="Why Code Works Well Here" icon="rocket">
-A nested loop with hex spacing math generates a perfect honeycomb pattern clipped to a circle. Change `hex_r` or `coaster_r` and the pattern regenerates with the correct number of cells. The math handles all the positioning automatically.
+Two loops cut hexagonal pockets into a disc. Pockets in one row are one `pitch` apart, the next row is shifted by half a pitch, and a pocket is kept only if all of it lies 3 mm inside the rim. With these values the script reports 37 pockets.
 </Card>
 
 ```python
@@ -345,7 +346,7 @@ export_all(coaster, "02_honeycomb_coaster", (218, 165, 32))
 
 
 <Card title="Why Code Works Well Here" icon="rocket">
-The vase profile is a sine wave: `r = base_r + amplitude * sin(...)`. Code lets you define shapes directly from math equations and loft through the resulting cross-sections. Change the amplitude, frequency, or number of sections and the shape updates instantly.
+The outline comes from a formula: at 21 heights the script draws an ellipse whose radius follows a sine wave. Then `loft()` joins the ellipses with a smooth skin and `shell()` hollows the solid to a wall of 2.5 mm. The radius is 18 mm at the base, 42 mm at mid height and 18 mm at the top.
 </Card>
 
 ```python
@@ -371,6 +372,7 @@ for i in range(n_sections + 1):
     z = height * i / n_sections
     t = i / n_sections
     # Sine-modulated radius: wide base, narrow waist, flared top
+    # (with the values above: 18 mm at the base, 42 mm at mid height, 18 mm at the top)
     r = base_r + amplitude * math.sin(t * math.pi * 2 - math.pi / 2)
     wire = cq.Workplane("XY").workplane(offset=z).ellipse(r, r * 0.85).val()
     wp = wp.add(wire)
@@ -383,7 +385,7 @@ print("Mathematical vase: sine-wave profile, 20 cross-sections")
 export_gradient(vase, "03_math_vase", (0, 128, 128), (218, 165, 32))
 ```
 
-The GLB uses a Z-gradient from teal at the base to gold at the top, applied per-vertex by `export_gradient()`.
+In the GLB, `export_gradient()` colors the vase from teal at the base to gold at the top.
 
 :::note[Output]
 `output/03_math_vase.step` (290 KB), `output/03_math_vase.stl` (375 KB), `output/03_math_vase.glb` (151 KB)
@@ -395,7 +397,7 @@ The GLB uses a Z-gradient from teal at the base to gold at the top, applied per-
 
 
 <Card title="Why Code Works Well Here" icon="rocket">
-Each floor is a square, rotated by `twist_per_floor` degrees and scaled down by a `taper` factor. A loop handles all the repetition precisely. Change the twist angle from 5 to 10 degrees and the entire tower reshapes.
+Each floor is a square, turned 5 degrees more than the floor below and 3 percent smaller. A loop draws the 17 squares and `loft()` joins them. At the top the square has turned 80 degrees and its side is 18.4 mm, from 30 mm at the base.
 </Card>
 
 ```python
@@ -446,13 +448,13 @@ export_gradient(tower, "04_twisted_tower", (30, 60, 180), (140, 40, 180))
 
 
 <Card title="Why Code Works Well Here" icon="rocket">
-One `rarray()` call places a grid of holes. The script computes how many holes fit given the plate size, margins, and spacing. Change the hole diameter or spacing and the entire pattern regenerates from that single line.
+The script counts the holes before it drills them: in each direction, the distance between the two margins divided by the spacing, plus one. Here that is 9 by 7, so one `rarray()` call drills 63 holes.
 </Card>
 
 ```python
 """
 Example 5: Perforated Plate
-One rarray() places 100+ holes instantly.
+One rarray() places a grid of 63 holes instantly.
 """
 
 import cadquery as cq
@@ -494,7 +496,7 @@ export_all(plate, "05_perforated_plate", (192, 192, 200))
 
 
 <Card title="Why Code Works Well Here" icon="rocket">
-The number of cable slots, their width, depth, and spacing are all parameters. Change `n_slots = 6` to `n_slots = 12` and the organizer doubles in size with the correct geometry. The slot cutting loop handles all the repetitive work.
+The width is computed from the slot count: `n_slots` slots and `n_slots + 1` walls. Six slots of 8 mm and seven walls of 3 mm give 69 mm. With `n_slots = 12` the body grows to 135 mm.
 </Card>
 
 ```python
@@ -563,7 +565,7 @@ export_all(organizer, "06_cable_organizer", (0, 140, 140))
 
 
 <Card title="Why Code Works Well Here" icon="rocket">
-CadQuery's `Wire.makeHelix()` generates a true mathematical helix from pitch, height, and radius parameters. A circular wire cross-section is swept along this path. Wire diameter, coil diameter, pitch, and number of turns are all parameters. This is geometry defined entirely from equations.
+`Wire.makeHelix()` makes an exact helix from the pitch (the rise in one turn), the height and the coil radius, and a circle of the wire diameter is swept along it. Five turns at 8 mm give a spring 40 mm tall. The script only draws: it does not check that the wire can carry a load, or that the pitch is larger than the wire diameter.
 </Card>
 
 ```python
@@ -588,21 +590,24 @@ height = pitch * n_turns
 helix_wire = cq.Wire.makeHelix(pitch, height, coil_r)
 
 # Create circular cross-section at helix start
+# (the helix starts at (coil_r, 0, 0) and runs in the Y direction,
+#  so the circle is drawn on the XZ plane, centered on that point)
 cross_section = (
-    cq.Workplane("YZ")
+    cq.Workplane("XZ")
     .transformed(offset=(coil_r, 0, 0))
     .circle(wire_d / 2)
 )
 
 # Sweep cross-section along helix
-spring = cross_section.sweep(cq.Workplane().add(helix_wire))
+# (isFrenet=True keeps the circle at a right angle to the path)
+spring = cross_section.sweep(cq.Workplane().add(helix_wire), isFrenet=True)
 
 print(f"Helical spring: {n_turns} turns, {wire_d}mm wire, {coil_d}mm coil")
 export_all(spring, "07_spring", (140, 150, 170), tolerance=0.5)
 ```
 
 :::note[Output]
-`output/07_spring.step` (67 KB), `output/07_spring.stl` (5.4 MB), `output/07_spring.glb` (2.2 MB)
+`output/07_spring.step` (67 KB), `output/07_spring.stl` (5.3 MB), `output/07_spring.glb` (2.1 MB)
 :::
 
 ## 8. Planetary Gear Set
@@ -611,7 +616,7 @@ export_all(spring, "07_spring", (140, 150, 170), tolerance=0.5)
 
 
 <Card title="Why Code Works Well Here" icon="rocket">
-Sun gear, planet gears, and ring gear all derive from a shared `module` value and tooth counts. The constraint `ring_z = sun_z + 2 * planet_z` is enforced automatically. Change the module or tooth counts and every gear regenerates with correct meshing. The multi-part GLB export gives each component its own color.
+Three planet gears run between a sun gear and a ring gear with teeth on its inside. Sizes come from the tooth counts and one `module` (pitch diameter divided by number of teeth, in mm). A planet must fit between the sun and the ring, so `ring_z = sun_z + 2 * planet_z`: 16 + 2 × 8 = 32 teeth. The teeth here are straight-sided points, not the involute shape that real gears need, so a printed copy will not run smoothly.
 </Card>
 
 ```python
@@ -731,7 +736,7 @@ export_multipart(parts, "08_planetary_gears")
 <InArticleAd />
 
 
-Save this as `run_all.py` to generate all 24 output files at once:
+Save this as `run_all.py` to run the 8 scripts and write all 24 output files. A script that fails prints the last line of its error:
 
 ```python
 """Run all 8 examples and generate STEP/STL/GLB output."""
@@ -764,11 +769,17 @@ for script in SCRIPTS:
 print("\nDone! Check the output/ directory for STEP, STL, and GLB files.")
 ```
 
-Upload the generated `.glb` files to [SiliconWit's GLB Viewer](https://siliconwit.com/product-development/glb-viewer/) to see the colored 3D models. Open the `.step` files in FreeCAD for precise measurements and further editing.
+## What the course builds next
 
-:::tip[Next: Lesson 1]
-Ready to build real engineering parts? Start with [Lesson 1: Parametric Hardware Library from Engineering Standards](/education/code-based-mechanical-design/parametric-hardware-library-engineering-standards), where you will generate 50+ ISO-standard fasteners from code.
-:::
+No shape here was checked against a load, a standard or a temperature. Each lesson that follows builds one kind of part and checks it by calculation:
+
+- [Fasteners](/education/code-based-mechanical-design/parametric-hardware-library-engineering-standards/), with dimensions from ISO tables. Start here: it also sets up Jupyter and a 3D viewer.
+- [Involute gears](/education/code-based-mechanical-design/involute-gear-systems/): the real tooth shape and its bending stress.
+- [Enclosure](/education/code-based-mechanical-design/custom-enclosure-pcb-data/): a printed box sized from a circuit board.
+- [Heat sinks](/education/code-based-mechanical-design/heat-sink-design-thermal-optimization/), compared by thermal resistance.
+- [Lattices](/education/code-based-mechanical-design/lattice-structures-tpms-additive-manufacturing/), and what each printing process can make.
+- [Springs](/education/code-based-mechanical-design/spring-design-stress-verification/), with stress and fatigue checks.
+- [Bracket optimization](/education/code-based-mechanical-design/fea-driven-structural-optimization/): mass against stress, by finite element analysis.
 
 <CodeBasedMechanicalDesignComments />
 
