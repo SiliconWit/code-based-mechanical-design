@@ -448,7 +448,7 @@ def raspberry_pi_4_data() -> BoardData:
 <InArticleAd />
 
 
-A box exactly the size of the board does not work. A printed part comes out a few tenths of a millimeter larger or smaller than the model, so every part that must fit into another needs a gap, called a clearance. The walls must also suit the process that makes them.
+A printed part comes out a few tenths of a millimeter larger or smaller than the model, so a box exactly the size of the board does not fit. Every part that fits into another needs a gap, called a clearance, and the walls must suit the process that makes them.
 
 <CardGrid>
   <Card title="Shell" icon="setting">
@@ -1174,7 +1174,7 @@ def add_snap_catches(lid: cq.Workplane, board: BoardData,
 
 ### How a snap-fit works, and why this one does not latch
 
-A snap-fit hook is a thin beam fixed at one end (a cantilever) with a catch on its free end. During assembly a ramp on the catch pushes the beam aside. Past an edge on the other part, the beam springs back and the flat face of the catch holds behind that edge.
+A snap-fit hook is a thin beam fixed at one end (a cantilever), like a diving board, with a catch on its free end. During assembly a ramp on the catch pushes the beam aside; past an edge on the other part it springs back, and the flat face of the catch holds behind that edge.
 
 The beam must bend by the depth of the catch without damage. The largest strain (stretch per unit length, with no unit) is at the fixed end:
 
@@ -1422,7 +1422,7 @@ Files exported:
 ```
 
 :::tip[Instrument it]
-An enclosure is what lets an instrument live where the data is. Design it for the sensor, not just the board: vent or window the part that must meet the environment (air, light, a probe) while sealing the electronics to an IP rating that matches the site, add mounting features so it bolts rigidly to the machine it watches, and leave a gland for the cable or a clear path for the antenna. A well-housed node is one you can deploy and [keep watching](https://siliconwit.io) for years, instead of fishing out a dead board.
+An enclosure lets an instrument live where the data is. Design it for the sensor as well as the board: vent or window the part that must meet the environment (air, light, a probe), seal the electronics to an IP rating that suits the site, add mounting features so it bolts rigidly to the machine it watches, and leave a gland for the cable or a clear path for the antenna. A well-housed node is one you can [keep watching](https://siliconwit.io) for years.
 :::
 
 ## Design for 3D Printing

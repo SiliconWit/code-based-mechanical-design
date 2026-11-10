@@ -344,7 +344,7 @@ For M8, $d_3 = 8 - 1.2269 \times 1.25 = 6.466$ mm, as in the table.
 <InArticleAd />
 
 
-The first step is encoding these ISO tables as Python dictionaries. This is the parametric foundation: every function will look up dimensions from these dictionaries.
+The ISO tables go into Python dictionaries once, and every function looks up its dimensions there.
 
 ```python
 import cadquery as cq
