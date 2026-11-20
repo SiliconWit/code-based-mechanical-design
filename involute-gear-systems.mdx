@@ -1296,7 +1296,7 @@ verify_gear_train(0.5, 1000)
 ```
 
 :::tip[Instrument it]
-A gear train shows trouble as vibration: as teeth wear, pit or chip, energy appears at the gear-mesh frequency (tooth count times shaft speed) and its harmonics. A MEMS accelerometer (ADXL345, or the wider-band ADXL1002) on the housing near the bearing detects it, and a tachometer or encoder on the shaft lets you match the spectrum to the mesh frequency. An ESP32 or STM32 reads them and can [flag the rising mesh tone](https://siliconwit.io) long before a tooth breaks. This matters more for 3D-printed gears, which wear faster than cut steel.
+A gear train shows trouble as vibration: as teeth wear, pit or chip, energy appears at the gear-mesh frequency (tooth count times shaft speed) and its harmonics. A MEMS accelerometer (ADXL345, or the wider-band ADXL1002) on the housing near the bearing detects it, and a tachometer or encoder on the shaft lets you match the spectrum to the mesh frequency. An ESP32 or STM32 reads them and can spot the rising mesh tone long before a tooth breaks. Send that tone over MQTT to a broker you run, or to [siliconwit.io](https://siliconwit.io), our monitoring service, to keep its trend and alert a person when it rises; it works with any MQTT client. This matters more for 3D-printed gears, which wear faster than cut steel.
 :::
 
 ## Design Guidelines for 3D-Printed Gears

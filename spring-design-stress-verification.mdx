@@ -1070,7 +1070,7 @@ Load a torsion spring only in the direction that tightens the coil. Loading it o
 :::
 
 :::tip[Instrument it]
-The real rate of a spring often differs from the calculated one, because wire diameter varies in manufacture and a spring relaxes over time. Press it against a load cell and read the travel with a dial gauge to get the true force-deflection curve. An ESP32 or STM32 can log it, and on a spring that holds a preload you can [watch for relaxation](https://siliconwit.io) over thousands of cycles.
+The real rate of a spring often differs from the calculated one, because wire diameter varies in manufacture and a spring relaxes over time. Press it against a load cell and read the travel with a dial gauge to get the true force-deflection curve. An ESP32 or STM32 can log it. On a spring that holds a preload, send the force over MQTT to a broker you run, or to [siliconwit.io](https://siliconwit.io), our monitoring service, to keep the record that shows relaxation over thousands of cycles; it works with any MQTT client.
 :::
 
 ## Summary and Key Takeaways
